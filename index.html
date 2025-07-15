@@ -74,6 +74,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="root"></div>
 
@@ -276,126 +277,7 @@
             }
         };
 
-        // Agregar estas funciones de debug en tu código HTML, después de la definición de API
-
-// Función para debug - obtener datos raw de appointments
-const debugAppointments = async () => {
-    try {
-        console.log('=== DEBUG: Obteniendo appointments raw ===');
-        const result = await API.call('debugAppointments');
-        console.log('Resultado debug:', result);
-        return result;
-    } catch (error) {
-        console.error('Error en debug appointments:', error);
-        throw error;
-    }
-};
-
-// Función para limpiar datos de prueba
-const clearTestData = async () => {
-    try {
-        console.log('=== DEBUG: Limpiando datos de prueba ===');
-        const result = await API.call('clearTestData');
-        console.log('Resultado limpiar:', result);
-        return result;
-    } catch (error) {
-        console.error('Error limpiando datos:', error);
-        throw error;
-    }
-};
-
-// Función para probar la carga de appointments
-const testLoadAppointments = async () => {
-    try {
-        console.log('=== TEST: Cargando appointments ===');
-        const result = await API.getAppointments();
-        console.log('Appointments cargados:', result);
-        console.log('Total appointments:', result.data ? result.data.length : 0);
         
-        if (result.data && result.data.length > 0) {
-            console.log('Primer appointment:', result.data[0]);
-        }
-        
-        return result;
-    } catch (error) {
-        console.error('Error test load appointments:', error);
-        throw error;
-    }
-};
-
-// Función para probar guardar una cita de prueba
-const testSaveAppointment = async () => {
-    try {
-        console.log('=== TEST: Guardando cita de prueba ===');
-        
-        const testAppointment = {
-            id: Date.now(),
-            patientName: 'Paciente de Prueba',
-            phone: '123-456-7890',
-            email: 'prueba@test.com',
-            date: '2024-01-15',
-            time: '10:00',
-            type: 'Consulta',
-            notes: 'Cita de prueba',
-            status: 'Programada',
-            doctorId: 1,
-            clinicId: 1,
-            createdAt: new Date().toISOString()
-        };
-        
-        console.log('Datos a guardar:', testAppointment);
-        
-        const result = await API.addAppointment(testAppointment);
-        console.log('Resultado guardar:', result);
-        
-        // Ahora intentar cargar de nuevo
-        await testLoadAppointments();
-        
-        return result;
-    } catch (error) {
-        console.error('Error test save appointment:', error);
-        throw error;
-    }
-};
-
-// Agregar botones de debug (temporal)
-const addDebugButtons = () => {
-    const debugContainer = document.createElement('div');
-    debugContainer.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: white;
-        border: 2px solid #333;
-        padding: 10px;
-        z-index: 1000;
-        border-radius: 5px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    `;
-    
-    debugContainer.innerHTML = `
-        <h4>Debug Panel</h4>
-        <button onclick="debugAppointments()" style="margin: 2px; padding: 5px;">Ver Raw Data</button><br>
-        <button onclick="testLoadAppointments()" style="margin: 2px; padding: 5px;">Test Load</button><br>
-        <button onclick="testSaveAppointment()" style="margin: 2px; padding: 5px;">Test Save</button><br>
-        <button onclick="clearTestData()" style="margin: 2px; padding: 5px;">Clear Test</button><br>
-        <button onclick="this.parentElement.remove()" style="margin: 2px; padding: 5px; background: red; color: white;">Cerrar</button>
-    `;
-    
-    document.body.appendChild(debugContainer);
-};
-
-// Hacer las funciones globales para que funcionen con onclick
-window.debugAppointments = debugAppointments;
-window.testLoadAppointments = testLoadAppointments;
-window.testSaveAppointment = testSaveAppointment;
-window.clearTestData = clearTestData;
-
-// Ejecutar cuando cargue la página
-document.addEventListener('DOMContentLoaded', () => {
-    // Agregar botones de debug después de 2 segundos
-    setTimeout(addDebugButtons, 2000);
-});
 
         const PharmacyPOS = () => {
             // Estados principales
@@ -2872,5 +2754,286 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ReactDOM.render(React.createElement(PharmacyPOS), document.getElementById('root'));
     </script>
+    <!-- Agregar esto JUSTO ANTES del </body> en tu HTML -->
+
+<!-- Panel de Debug Fijo -->
+<div id="debug-panel" style="
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: white;
+    border: 2px solid #333;
+    padding: 15px;
+    z-index: 9999;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    font-family: monospace;
+    font-size: 12px;
+    max-width: 200px;
+">
+    <h4 style="margin: 0 0 10px 0; color: #333;">🔍 Debug Panel</h4>
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+        <button onclick="debugAppointments()" style="
+            padding: 8px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        ">Ver Raw Data</button>
+        
+        <button onclick="testLoadAppointments()" style="
+            padding: 8px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        ">Test Load</button>
+        
+        <button onclick="testSaveAppointment()" style="
+            padding: 8px;
+            background: #FF9800;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        ">Test Save</button>
+        
+        <button onclick="clearTestData()" style="
+            padding: 8px;
+            background: #9C27B0;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        ">Clear Test</button>
+        
+        <button onclick="checkConnection()" style="
+            padding: 8px;
+            background: #607D8B;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        ">Test Connection</button>
+        
+        <button onclick="document.getElementById('debug-panel').style.display='none'" style="
+            padding: 8px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        ">Cerrar</button>
+    </div>
+</div>
+
+<script>
+// Funciones de Debug - Agregar DESPUÉS de la definición de API pero ANTES del componente React
+
+// Función para debug - obtener datos raw de appointments
+const debugAppointments = async () => {
+    try {
+        console.log('=== DEBUG: Obteniendo appointments raw ===');
+        
+        const formData = new FormData();
+        formData.append('action', 'debugAppointments');
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        console.log('Resultado debug:', result);
+        
+        if (result.success) {
+            console.log('📊 Datos en Google Sheets:');
+            console.table(result.data);
+            alert(`✅ Raw data obtenido. Ver consola (F12). Filas: ${result.data.length}`);
+        } else {
+            console.error('Error:', result.message);
+            alert(`❌ Error: ${result.message}`);
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error en debug appointments:', error);
+        alert(`❌ Error de conexión: ${error.message}`);
+        throw error;
+    }
+};
+
+// Función para probar conexión
+const checkConnection = async () => {
+    try {
+        console.log('=== TEST: Verificando conexión ===');
+        
+        const formData = new FormData();
+        formData.append('action', 'test');
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        console.log('Test conexión:', result);
+        
+        if (result.success) {
+            alert('✅ Conexión exitosa con Google Sheets');
+        } else {
+            alert(`❌ Error de conexión: ${result.message}`);
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error test conexión:', error);
+        alert(`❌ Error de conexión: ${error.message}`);
+        throw error;
+    }
+};
+
+// Función para probar la carga de appointments
+const testLoadAppointments = async () => {
+    try {
+        console.log('=== TEST: Cargando appointments ===');
+        
+        const formData = new FormData();
+        formData.append('action', 'getAppointments');
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        console.log('Appointments cargados:', result);
+        
+        if (result.success) {
+            console.log('📅 Appointments encontrados:', result.data.length);
+            console.table(result.data);
+            alert(`✅ Carga exitosa. Encontrados: ${result.data.length} appointments. Ver consola (F12)`);
+        } else {
+            console.error('Error:', result.message);
+            alert(`❌ Error al cargar: ${result.message}`);
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error test load appointments:', error);
+        alert(`❌ Error al cargar: ${error.message}`);
+        throw error;
+    }
+};
+
+// Función para probar guardar una cita de prueba
+const testSaveAppointment = async () => {
+    try {
+        console.log('=== TEST: Guardando cita de prueba ===');
+        
+        const testAppointment = {
+            id: Date.now(),
+            patientName: 'Paciente de Prueba',
+            phone: '123-456-7890',
+            email: 'prueba@test.com',
+            date: '2024-01-20',
+            time: '10:00',
+            type: 'Consulta',
+            notes: 'Cita de prueba para debug',
+            status: 'Programada',
+            doctorId: 1,
+            clinicId: 1,
+            createdAt: new Date().toISOString()
+        };
+        
+        console.log('Datos a guardar:', testAppointment);
+        
+        const formData = new FormData();
+        formData.append('action', 'addAppointment');
+        formData.append('data', JSON.stringify(testAppointment));
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        console.log('Resultado guardar:', result);
+        
+        if (result.success) {
+            alert('✅ Cita de prueba guardada exitosamente');
+            
+            // Intentar cargar de nuevo
+            setTimeout(() => {
+                testLoadAppointments();
+            }, 1000);
+        } else {
+            alert(`❌ Error al guardar: ${result.message}`);
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error test save appointment:', error);
+        alert(`❌ Error al guardar: ${error.message}`);
+        throw error;
+    }
+};
+
+// Función para limpiar datos de prueba
+const clearTestData = async () => {
+    try {
+        if (!confirm('¿Seguro que quieres limpiar los datos de prueba?')) {
+            return;
+        }
+        
+        console.log('=== TEST: Limpiando datos de prueba ===');
+        
+        const formData = new FormData();
+        formData.append('action', 'clearTestData');
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        console.log('Resultado limpiar:', result);
+        
+        if (result.success) {
+            alert('✅ Datos de prueba limpiados');
+        } else {
+            alert(`❌ Error al limpiar: ${result.message}`);
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error limpiando datos:', error);
+        alert(`❌ Error al limpiar: ${error.message}`);
+        throw error;
+    }
+};
+
+// Mostrar panel de debug automáticamente
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔍 Panel de debug activado');
+    
+    // Mostrar mensaje en consola
+    console.log(`
+    🔍 PANEL DE DEBUG ACTIVADO
+    
+    Funciones disponibles:
+    - debugAppointments(): Ver datos raw de Google Sheets
+    - testLoadAppointments(): Probar carga de appointments
+    - testSaveAppointment(): Guardar cita de prueba
+    - clearTestData(): Limpiar datos de prueba
+    - checkConnection(): Probar conexión
+    
+    El panel visual está en la esquina superior derecha.
+    `);
+});
+</script>
 </body>
 </html>
