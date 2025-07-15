@@ -81,7 +81,7 @@
         const { useState, useEffect, useMemo } = React;
 
         // CONFIGURACIÓN DE GOOGLE SHEETS
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyhs3YpDVZdjTuFp5FLZKl0_pubvR5fpLI75vM-s22TO2tLEXg7ecNvIJmYW0CEsSoh/exec';
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcXYtmTfusISzPsLcIc7Nba3WUfAPgpXaFT_K3KdSCw8B_Dn47v69lOuT4Dy7GWMlw/exec';
 
         // Iconos SVG
         const Icons = {
@@ -296,6 +296,7 @@
             const [selectedDayAppointments, setSelectedDayAppointments] = useState([]);
             const [selectedDayDate, setSelectedDayDate] = useState(null);
             const [activeDoctorId, setActiveDoctorId] = useState(1);
+            const [activeClinicId, setActiveClinicId] = useState(1);
             const [loading, setLoading] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState('checking');
             const [lastSync, setLastSync] = useState(null);
@@ -310,7 +311,8 @@
                 quantity: '',
                 minStock: '5',
                 representative: '',
-                phone: ''
+                phone: '',
+                clinicId: 1
             });
 
             const [addStockData, setAddStockData] = useState({
@@ -328,7 +330,8 @@
                 type: 'Consulta',
                 notes: '',
                 status: 'Programada',
-                doctorId: 1
+                doctorId: 1,
+                clinicId: 1
             });
 
             const presentations = [
@@ -336,10 +339,15 @@
                 'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel'
             ];
 
+            const clinics = [
+                { id: 1, name: 'Clínica Aztlan', location: 'Clínica Aztlan', color: 'blue' },
+                { id: 2, name: 'Clínica Casa Blanca', location: 'Clínica Casa Blanca', color: 'emerald' }
+            ];
+
             const doctors = [
-                { id: 1, name: 'Dra. Samira', specialty: 'Urgenciologa', color: 'blue' },
-                { id: 2, name: 'Dra. Silvia', specialty: 'Ginecologo', color: 'green' },
-                { id: 3, name: 'Dr. Ubaldo Camerino', specialty: 'CEO dueno de media ciudad peluche', color: 'purple' }
+                { id: 1, name: 'Dra. Samira', specialty: 'Urgenciologo', color: 'blue' },
+                { id: 2, name: 'Dra. Silvia', specialty: 'Ginecologa', color: 'green' },
+                { id: 3, name: 'Dr. Ubaldo', specialty: 'CEO', color: 'purple' }
             ];
 
             const appointmentTypes = [
@@ -411,20 +419,27 @@
             // Limpiar la hora seleccionada cuando cambie la fecha o el médico para mostrar horarios disponibles
             useEffect(() => {
                 if (appointmentForm.date && appointmentForm.doctorId) {
-                    const availableSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId);
+                    const availableSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
                     // Si la hora actual ya no está disponible (y no estamos editando), limpiarla
                     if (appointmentForm.time && !availableSlots.includes(appointmentForm.time) && !editingAppointment) {
                         setAppointmentForm(prev => ({...prev, time: ''}));
                     }
                 }
-            }, [appointmentForm.date, appointmentForm.doctorId, appointments, editingAppointment]);
+            }, [appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId, appointments, editingAppointment]);
 
-            // Búsqueda inteligente
+            // Actualizar formularios cuando cambie la clínica activa
+            useEffect(() => {
+                setFormData(prev => ({...prev, clinicId: activeClinicId}));
+                setAppointmentForm(prev => ({...prev, clinicId: activeClinicId}));
+            }, [activeClinicId]);
+
+            // Búsqueda inteligente filtrada por clínica
             const filteredMedications = useMemo(() => {
-                if (!searchTerm) return medications;
+                const clinicMedications = medications.filter(med => med.clinicId === activeClinicId);
+                if (!searchTerm) return clinicMedications;
                 
                 const term = searchTerm.toLowerCase();
-                return medications.filter(med => {
+                return clinicMedications.filter(med => {
                     const searchFields = [
                         med.name || '',
                         med.activeSubstance || '',
@@ -435,15 +450,16 @@
                     
                     return searchFields.includes(term);
                 });
-            }, [medications, searchTerm]);
+            }, [medications, searchTerm, activeClinicId]);
 
-            // Medicamentos con stock bajo
-            const lowStockMeds = medications.filter(med => med.quantity <= med.minStock);
+            // Medicamentos con stock bajo filtrados por clínica
+            const lowStockMeds = medications.filter(med => med.quantity <= med.minStock && med.clinicId === activeClinicId);
 
-            // Medicamentos más vendidos
+            // Medicamentos más vendidos filtrados por clínica
             const topSellingMeds = useMemo(() => {
+                const clinicSales = salesHistory.filter(sale => sale.clinicId === activeClinicId);
                 const salesCount = {};
-                salesHistory.forEach(sale => {
+                clinicSales.forEach(sale => {
                     if (sale.items && Array.isArray(sale.items)) {
                         sale.items.forEach(item => {
                             salesCount[item.id] = (salesCount[item.id] || 0) + item.quantity;
@@ -452,13 +468,14 @@
                 });
 
                 return medications
+                    .filter(med => med.clinicId === activeClinicId)
                     .map(med => ({
                         ...med,
                         totalSold: salesCount[med.id] || 0
                     }))
                     .sort((a, b) => b.totalSold - a.totalSold)
                     .slice(0, 5);
-            }, [medications, salesHistory]);
+            }, [medications, salesHistory, activeClinicId]);
 
             // Funciones de calendario
             const getDaysInMonth = (date) => {
@@ -500,43 +517,50 @@
                 return days;
             };
 
-            const getAppointmentsForDate = (date, doctorId = null) => {
+            const getAppointmentsForDate = (date, doctorId = null, clinicId = null) => {
                 const dateStr = date.toISOString().split('T')[0];
                 return appointments.filter(apt => {
                     const matchesDate = apt.date === dateStr;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
-                    return matchesDate && matchesDoctor;
+                    const matchesClinic = clinicId ? apt.clinicId === clinicId : apt.clinicId === activeClinicId;
+                    return matchesDate && matchesDoctor && matchesClinic;
                 });
             };
 
-            const getAvailableTimeSlots = (selectedDate, doctorId) => {
+            const getAvailableTimeSlots = (selectedDate, doctorId, clinicId = null) => {
                 if (!selectedDate || !doctorId) return timeSlots;
                 
                 const dateStr = typeof selectedDate === 'string' ? selectedDate : selectedDate.toISOString().split('T')[0];
-                const dayAppointments = appointments.filter(apt => apt.date === dateStr && apt.doctorId === doctorId);
+                const dayAppointments = appointments.filter(apt => 
+                    apt.date === dateStr && 
+                    apt.doctorId === doctorId && 
+                    apt.clinicId === (clinicId || activeClinicId)
+                );
                 const bookedTimes = dayAppointments.map(apt => apt.time);
                 
                 return timeSlots.filter(time => !bookedTimes.includes(time));
             };
 
             const handleDayClick = (date, doctorId) => {
-                const dayAppointments = getAppointmentsForDate(date, doctorId);
+                const dayAppointments = getAppointmentsForDate(date, doctorId, activeClinicId);
                 setSelectedDayDate(date);
                 setSelectedDayAppointments(dayAppointments);
                 setAppointmentForm({
                     ...appointmentForm,
                     date: date.toISOString().split('T')[0],
-                    doctorId: doctorId
+                    doctorId: doctorId,
+                    clinicId: activeClinicId
                 });
                 setShowDayAppointments(true);
             };
 
-            const getTodayAppointments = (doctorId = null) => {
+            const getTodayAppointments = (doctorId = null, clinicId = null) => {
                 const today = new Date().toISOString().split('T')[0];
                 return appointments.filter(apt => {
                     const matchesDate = apt.date === today;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
-                    return matchesDate && matchesDoctor;
+                    const matchesClinic = clinicId ? apt.clinicId === clinicId : apt.clinicId === activeClinicId;
+                    return matchesDate && matchesDoctor && matchesClinic;
                 });
             };
 
@@ -700,17 +724,19 @@
                     return;
                 }
 
-                // Verificar si ya existe una cita en el mismo horario para el mismo médico
+                // Verificar si ya existe una cita en el mismo horario para el mismo médico en la misma clínica
                 const existingAppointment = appointments.find(apt => 
                     apt.date === appointmentForm.date && 
                     apt.time === appointmentForm.time &&
                     apt.doctorId === appointmentForm.doctorId &&
+                    apt.clinicId === activeClinicId &&
                     (!editingAppointment || apt.id !== editingAppointment.id)
                 );
 
                 if (existingAppointment) {
                     const doctor = doctors.find(d => d.id === appointmentForm.doctorId);
-                    alert(`${doctor.name} ya tiene una cita programada para las ${appointmentForm.time} el ${appointmentForm.date}. Por favor seleccione otro horario.`);
+                    const clinic = clinics.find(c => c.id === activeClinicId);
+                    alert(`${doctor.name} ya tiene una cita programada para las ${appointmentForm.time} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
                     return;
                 }
 
@@ -728,6 +754,7 @@
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
                         doctorId: appointmentForm.doctorId,
+                        clinicId: activeClinicId,
                         createdAt: new Date().toISOString()
                     };
 
@@ -756,17 +783,19 @@
                     return;
                 }
 
-                // Verificar si ya existe una cita en el mismo horario para el mismo médico (excluyendo la cita actual)
+                // Verificar si ya existe una cita en el mismo horario para el mismo médico en la misma clínica (excluyendo la cita actual)
                 const existingAppointment = appointments.find(apt => 
                     apt.date === appointmentForm.date && 
                     apt.time === appointmentForm.time &&
                     apt.doctorId === appointmentForm.doctorId &&
+                    apt.clinicId === appointmentForm.clinicId &&
                     apt.id !== editingAppointment.id
                 );
 
                 if (existingAppointment) {
                     const doctor = doctors.find(d => d.id === appointmentForm.doctorId);
-                    alert(`${doctor.name} ya tiene una cita programada para las ${appointmentForm.time} el ${appointmentForm.date}. Por favor seleccione otro horario.`);
+                    const clinic = clinics.find(c => c.id === appointmentForm.clinicId);
+                    alert(`${doctor.name} ya tiene una cita programada para las ${appointmentForm.time} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
                     return;
                 }
 
@@ -783,7 +812,8 @@
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
-                        doctorId: appointmentForm.doctorId
+                        doctorId: appointmentForm.doctorId,
+                        clinicId: appointmentForm.clinicId
                     };
 
                     if (connectionStatus === 'online') {
@@ -949,8 +979,11 @@
                     medications,
                     salesHistory,
                     appointments,
+                    clinics,
+                    doctors,
+                    activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '2.1'
+                    version: '3.0'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -995,7 +1028,8 @@
                     quantity: '',
                     minStock: '5',
                     representative: '',
-                    phone: ''
+                    phone: '',
+                    clinicId: activeClinicId
                 });
             };
 
@@ -1009,7 +1043,8 @@
                     type: 'Consulta',
                     notes: '',
                     status: 'Programada',
-                    doctorId: activeDoctorId
+                    doctorId: activeDoctorId,
+                    clinicId: activeClinicId
                 });
             };
 
@@ -1086,7 +1121,7 @@
                     <header className="bg-blue-600 text-white shadow-lg">
                         <div className="max-w-7xl mx-auto px-4 py-4">
                             <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-6">
                                     <h1 className="text-2xl font-bold flex items-center gap-2">
                                         <Icons.Package />
                                         Farmacia Alcala Adame
@@ -1113,6 +1148,47 @@
                             </div>
                         </div>
                     </header>
+
+                    {/* Selector de Clínicas */}
+                    <div className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 py-4">
+                            <div className="flex flex-wrap gap-4 justify-center">
+                                {clinics.map(clinic => (
+                                    <button
+                                        key={clinic.id}
+                                        onClick={() => {
+                                            setActiveClinicId(clinic.id);
+                                            setCart([]); // Limpiar carrito al cambiar clínica
+                                        }}
+                                        className={`flex-1 min-w-64 max-w-sm p-4 rounded-lg border-2 transition-all ${
+                                            activeClinicId === clinic.id
+                                                ? `border-${clinic.color}-500 bg-${clinic.color}-50 text-${clinic.color}-700`
+                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className="text-center">
+                                            <h3 className="font-semibold text-lg">{clinic.name}</h3>
+                                            <p className="text-sm opacity-75">{clinic.location}</p>
+                                            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                                                <div>
+                                                    <p className="font-medium">{medications.filter(m => m.clinicId === clinic.id).length}</p>
+                                                    <p className="opacity-75">Productos</p>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">{getTodayAppointments(null, clinic.id).length}</p>
+                                                    <p className="opacity-75">Citas hoy</p>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">{medications.filter(m => m.clinicId === clinic.id && m.quantity <= m.minStock).length}</p>
+                                                    <p className="opacity-75">Stock bajo</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Navigation */}
                     <nav className="bg-white shadow-sm border-b">
@@ -1146,7 +1222,17 @@
                         {/* Dashboard */}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
-                                {medications.length === 0 ? (
+                                {/* Indicador de clínica activa */}
+                                <div className="bg-white rounded-lg shadow p-4">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            {clinics.find(c => c.id === activeClinicId)?.name} - {clinics.find(c => c.id === activeClinicId)?.location}
+                                        </h2>
+                                    </div>
+                                </div>
+
+                                {totalProducts === 0 ? (
                                     // Mensaje de bienvenida
                                     <div className="text-center py-12">
                                         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-auto">
@@ -1391,8 +1477,18 @@
                         {/* Inventario */}
                         {activeTab === 'inventory' && (
                             <div className="space-y-6">
+                                {/* Indicador de clínica activa */}
+                                <div className="bg-white rounded-lg shadow p-4">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            Inventario - {clinics.find(c => c.id === activeClinicId)?.name}
+                                        </h2>
+                                    </div>
+                                </div>
+
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <h2 className="text-2xl font-bold text-gray-900">Inventario</h2>
+                                    <div></div>
                                     <div className="flex items-center gap-4">
                                         <div className="relative">
                                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1522,7 +1618,20 @@
 
                         {/* Ventas */}
                         {activeTab === 'sales' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <>
+                            <div className="space-y-6">
+                                {/* Indicador de clínica activa */}
+                                <div className="bg-white rounded-lg shadow p-4">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            Ventas - {clinics.find(c => c.id === activeClinicId)?.name}
+                                        </h2>
+                                    </div>
+                                </div>
+                            </div>
+
+                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 {/* Búsqueda y productos */}
                                 <div className="lg:col-span-2 space-y-6">
                                     <div className="bg-white rounded-lg shadow p-6">
@@ -1542,7 +1651,9 @@
 
                                         <div className="space-y-3 max-h-96 overflow-y-auto">
                                             {filteredMedications.filter(med => med.quantity > 0).length === 0 ? (
-                                                <p className="text-gray-500 text-center py-8">No hay productos disponibles para venta</p>
+                                                <p className="text-gray-500 text-center py-8">
+                                                    No hay productos disponibles para venta en {clinics.find(c => c.id === activeClinicId)?.name}
+                                                </p>
                                             ) : (
                                                 filteredMedications.filter(med => med.quantity > 0).map(med => (
                                                     <div key={med.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
@@ -1632,18 +1743,30 @@
                                     )}
                                 </div>
                             </div>
+                            </>
                         )}
 
                         {/* Citas/Calendario */}
                         {activeTab === 'appointments' && (
                             <div className="space-y-6">
+                                {/* Indicador de clínica activa */}
+                                <div className="bg-white rounded-lg shadow p-4">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            Calendario de Citas - {clinics.find(c => c.id === activeClinicId)?.name}
+                                        </h2>
+                                    </div>
+                                </div>
+
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <h2 className="text-2xl font-bold text-gray-900">Calendario de Citas por Médico</h2>
+                                    <div></div>
                                     <button
                                         onClick={() => {
                                             setAppointmentForm({
                                                 ...appointmentForm,
-                                                doctorId: activeDoctorId
+                                                doctorId: activeDoctorId,
+                                                clinicId: activeClinicId
                                             });
                                             setShowAppointmentForm(true);
                                         }}
@@ -1658,7 +1781,7 @@
                                 {/* Selector de Médicos */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex flex-wrap gap-4">
-                                        {doctors.map(doctor => (
+                                                        {doctors.map(doctor => (
                                             <button
                                                 key={doctor.id}
                                                 onClick={() => setActiveDoctorId(doctor.id)}
@@ -1672,7 +1795,7 @@
                                                     <h3 className="font-semibold text-lg">{doctor.name}</h3>
                                                     <p className="text-sm opacity-75">{doctor.specialty}</p>
                                                     <p className="text-xs mt-1">
-                                                        {getTodayAppointments(doctor.id).length} citas hoy
+                                                        {getTodayAppointments(doctor.id, activeClinicId).length} citas hoy
                                                     </p>
                                                 </div>
                                             </button>
@@ -1794,12 +1917,12 @@
                                             </p>
                                         </div>
                                         <div className="p-6">
-                                            <h4 className="font-medium mb-3">Citas de Hoy</h4>
-                                            {getTodayAppointments(activeDoctorId).length === 0 ? (
+                                                                                                        <h4 className="font-medium mb-3">Citas de Hoy en {clinics.find(c => c.id === activeClinicId)?.name}</h4>
+                                            {getTodayAppointments(activeDoctorId, activeClinicId).length === 0 ? (
                                                 <p className="text-gray-500 text-sm">No hay citas programadas para hoy</p>
                                             ) : (
-                                                <div className="space-y-3">
-                                                    {getTodayAppointments(activeDoctorId).map(apt => (
+                                                                                                                <div className="space-y-3">
+                                                    {getTodayAppointments(activeDoctorId, activeClinicId).map(apt => (
                                                         <div key={apt.id} className="border border-gray-200 rounded-lg p-3">
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className="flex-1">
@@ -1861,7 +1984,15 @@
                         {/* Reportes */}
                         {activeTab === 'reports' && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-gray-900">Reportes</h2>
+                                {/* Indicador de clínica activa */}
+                                <div className="bg-white rounded-lg shadow p-4">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            Reportes - {clinics.find(c => c.id === activeClinicId)?.name}
+                                        </h2>
+                                    </div>
+                                </div>
                                 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                     {/* Medicamentos más vendidos */}
@@ -1896,10 +2027,10 @@
                                     <div className="bg-white rounded-lg shadow p-6">
                                         <h3 className="text-lg font-semibold mb-4">Historial de Ventas</h3>
                                         <div className="space-y-3 max-h-96 overflow-y-auto">
-                                            {salesHistory.length === 0 ? (
+                                            {salesHistory.filter(sale => sale.clinicId === activeClinicId).length === 0 ? (
                                                 <p className="text-gray-500 text-center py-8">No hay ventas registradas</p>
                                             ) : (
-                                                salesHistory.slice().reverse().map(sale => (
+                                                salesHistory.filter(sale => sale.clinicId === activeClinicId).slice().reverse().map(sale => (
                                                     <div key={sale.id} className="border border-gray-200 rounded-lg p-3">
                                                         <div className="flex justify-between items-start mb-2">
                                                             <span className="text-sm text-gray-600">
@@ -1925,7 +2056,7 @@
                                         <h3 className="text-lg font-semibold mb-4">Citas por Médico</h3>
                                         <div className="space-y-3">
                                             {doctors.map(doctor => {
-                                                const doctorAppointments = appointments.filter(apt => apt.doctorId === doctor.id);
+                                                const doctorAppointments = appointments.filter(apt => apt.doctorId === doctor.id && apt.clinicId === activeClinicId);
                                                 if (doctorAppointments.length === 0) return null;
                                                 
                                                 return (
@@ -1938,7 +2069,7 @@
                                                     </div>
                                                 );
                                             })}
-                                            {appointments.length === 0 && (
+                                            {appointments.filter(apt => apt.clinicId === activeClinicId).length === 0 && (
                                                 <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
                                             )}
                                         </div>
@@ -1949,7 +2080,7 @@
                                         <h3 className="text-lg font-semibold mb-4">Citas por Tipo</h3>
                                         <div className="space-y-3">
                                             {appointmentTypes.map(type => {
-                                                const count = appointments.filter(apt => apt.type === type).length;
+                                                const count = appointments.filter(apt => apt.type === type && apt.clinicId === activeClinicId).length;
                                                 if (count === 0) return null;
                                                 
                                                 return (
@@ -1959,7 +2090,7 @@
                                                     </div>
                                                 );
                                             })}
-                                            {appointments.length === 0 && (
+                                            {appointments.filter(apt => apt.clinicId === activeClinicId).length === 0 && (
                                                 <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
                                             )}
                                         </div>
@@ -1970,7 +2101,7 @@
                                         <h3 className="text-lg font-semibold mb-4">Citas por Estado</h3>
                                         <div className="space-y-3">
                                             {appointmentStatuses.map(status => {
-                                                const count = appointments.filter(apt => apt.status === status).length;
+                                                const count = appointments.filter(apt => apt.status === status && apt.clinicId === activeClinicId).length;
                                                 if (count === 0) return null;
                                                 
                                                 return (
@@ -1988,7 +2119,7 @@
                                                     </div>
                                                 );
                                             })}
-                                            {appointments.length === 0 && (
+                                            {appointments.filter(apt => apt.clinicId === activeClinicId).length === 0 && (
                                                 <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
                                             )}
                                         </div>
@@ -1998,6 +2129,7 @@
                         )}
                     </div>
 
+                    
                     {/* Modal Agregar/Editar Medicamento */}
                     {(showAddForm || editingMed) && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -2280,6 +2412,24 @@
                                     </div>
 
                                     <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Clínica *
+                                            </label>
+                                            <select
+                                                value={appointmentForm.clinicId}
+                                                onChange={(e) => setAppointmentForm({...appointmentForm, clinicId: parseInt(e.target.value), time: ''})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={loading}
+                                            >
+                                                {clinics.map(clinic => (
+                                                    <option key={clinic.id} value={clinic.id}>
+                                                        {clinic.name} - {clinic.location}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Médico *
