@@ -276,6 +276,127 @@
             }
         };
 
+        // Agregar estas funciones de debug en tu código HTML, después de la definición de API
+
+// Función para debug - obtener datos raw de appointments
+const debugAppointments = async () => {
+    try {
+        console.log('=== DEBUG: Obteniendo appointments raw ===');
+        const result = await API.call('debugAppointments');
+        console.log('Resultado debug:', result);
+        return result;
+    } catch (error) {
+        console.error('Error en debug appointments:', error);
+        throw error;
+    }
+};
+
+// Función para limpiar datos de prueba
+const clearTestData = async () => {
+    try {
+        console.log('=== DEBUG: Limpiando datos de prueba ===');
+        const result = await API.call('clearTestData');
+        console.log('Resultado limpiar:', result);
+        return result;
+    } catch (error) {
+        console.error('Error limpiando datos:', error);
+        throw error;
+    }
+};
+
+// Función para probar la carga de appointments
+const testLoadAppointments = async () => {
+    try {
+        console.log('=== TEST: Cargando appointments ===');
+        const result = await API.getAppointments();
+        console.log('Appointments cargados:', result);
+        console.log('Total appointments:', result.data ? result.data.length : 0);
+        
+        if (result.data && result.data.length > 0) {
+            console.log('Primer appointment:', result.data[0]);
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error test load appointments:', error);
+        throw error;
+    }
+};
+
+// Función para probar guardar una cita de prueba
+const testSaveAppointment = async () => {
+    try {
+        console.log('=== TEST: Guardando cita de prueba ===');
+        
+        const testAppointment = {
+            id: Date.now(),
+            patientName: 'Paciente de Prueba',
+            phone: '123-456-7890',
+            email: 'prueba@test.com',
+            date: '2024-01-15',
+            time: '10:00',
+            type: 'Consulta',
+            notes: 'Cita de prueba',
+            status: 'Programada',
+            doctorId: 1,
+            clinicId: 1,
+            createdAt: new Date().toISOString()
+        };
+        
+        console.log('Datos a guardar:', testAppointment);
+        
+        const result = await API.addAppointment(testAppointment);
+        console.log('Resultado guardar:', result);
+        
+        // Ahora intentar cargar de nuevo
+        await testLoadAppointments();
+        
+        return result;
+    } catch (error) {
+        console.error('Error test save appointment:', error);
+        throw error;
+    }
+};
+
+// Agregar botones de debug (temporal)
+const addDebugButtons = () => {
+    const debugContainer = document.createElement('div');
+    debugContainer.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: white;
+        border: 2px solid #333;
+        padding: 10px;
+        z-index: 1000;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    `;
+    
+    debugContainer.innerHTML = `
+        <h4>Debug Panel</h4>
+        <button onclick="debugAppointments()" style="margin: 2px; padding: 5px;">Ver Raw Data</button><br>
+        <button onclick="testLoadAppointments()" style="margin: 2px; padding: 5px;">Test Load</button><br>
+        <button onclick="testSaveAppointment()" style="margin: 2px; padding: 5px;">Test Save</button><br>
+        <button onclick="clearTestData()" style="margin: 2px; padding: 5px;">Clear Test</button><br>
+        <button onclick="this.parentElement.remove()" style="margin: 2px; padding: 5px; background: red; color: white;">Cerrar</button>
+    `;
+    
+    document.body.appendChild(debugContainer);
+};
+
+// Hacer las funciones globales para que funcionen con onclick
+window.debugAppointments = debugAppointments;
+window.testLoadAppointments = testLoadAppointments;
+window.testSaveAppointment = testSaveAppointment;
+window.clearTestData = clearTestData;
+
+// Ejecutar cuando cargue la página
+document.addEventListener('DOMContentLoaded', () => {
+    // Agregar botones de debug después de 2 segundos
+    setTimeout(addDebugButtons, 2000);
+});
+
         const PharmacyPOS = () => {
             // Estados principales
             const [medications, setMedications] = useState([]);
