@@ -81,7 +81,7 @@
         const { useState, useEffect, useMemo } = React;
 
         // CONFIGURACIÓN DE GOOGLE SHEETS
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcXYtmTfusISzPsLcIc7Nba3WUfAPgpXaFT_K3KdSCw8B_Dn47v69lOuT4Dy7GWMlw/exec/exec';
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcXYtmTfusISzPsLcIc7Nba3WUfAPgpXaFT_K3KdSCw8B_Dn47v69lOuT4Dy7GWMlw/exec';
 
         // Iconos SVG
         const Icons = {
@@ -1307,7 +1307,7 @@
                                                 <div className="flex items-center justify-between">
                                                     <div>
                                                         <p className="text-sm font-medium text-gray-600">Citas Hoy</p>
-                                                        <p className="text-2xl font-bold text-blue-600">{allTodayAppointments.length}</p>
+                                                        <p className="text-2xl font-bold text-blue-600">{todayAppointments.length}</p>
                                                     </div>
                                                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                                                         <Icons.Calendar />
@@ -1382,11 +1382,11 @@
                                                 <div className="p-6 border-b">
                                                     <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                                                         <Icons.Calendar />
-                                                        Citas de Hoy ({allTodayAppointments.length})
+                                                        Citas de Hoy ({todayAppointments.length})
                                                     </h3>
                                                 </div>
                                                 <div className="p-6">
-                                                    {allTodayAppointments.length === 0 ? (
+                                                    {todayAppointments.length === 0 ? (
                                                         <p className="text-gray-500">No hay citas programadas para hoy</p>
                                                     ) : (
                                                         <div className="space-y-4">
