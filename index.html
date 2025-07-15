@@ -112,10 +112,38 @@
                 return DateHelper.getLocalDateString(new Date());
             },
 
+            // Extraer solo la fecha de un string ISO o fecha completa
+            extractDateOnly: (dateString) => {
+                if (!dateString) return '';
+                
+                // Si es un string ISO como "2025-07-15T06:00:00.000Z"
+                if (typeof dateString === 'string' && dateString.includes('T')) {
+                    return dateString.split('T')[0];
+                }
+                
+                // Si es un string de fecha como "2025-07-15"
+                if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    return dateString;
+                }
+                
+                // Si es un objeto Date
+                if (dateString instanceof Date) {
+                    return DateHelper.getLocalDateString(dateString);
+                }
+                
+                // Si es otro formato, intenta convertirlo
+                try {
+                    return DateHelper.getLocalDateString(new Date(dateString));
+                } catch (e) {
+                    console.warn('Could not parse date:', dateString);
+                    return '';
+                }
+            },
+
             // Comparar si dos fechas son iguales (solo fecha, no hora)
             areSameDate: (date1, date2) => {
-                const d1 = typeof date1 === 'string' ? date1 : DateHelper.getLocalDateString(date1);
-                const d2 = typeof date2 === 'string' ? date2 : DateHelper.getLocalDateString(date2);
+                const d1 = DateHelper.extractDateOnly(date1);
+                const d2 = DateHelper.extractDateOnly(date2);
                 return d1 === d2;
             },
 
@@ -144,7 +172,7 @@
                     id: DataHelper.ensureNumber(apt.id),
                     doctorId: DataHelper.ensureNumber(apt.doctorId) || 1,
                     clinicId: DataHelper.ensureNumber(apt.clinicId) || 1,
-                    date: typeof apt.date === 'string' ? apt.date : DateHelper.getLocalDateString(apt.date)
+                    date: DateHelper.extractDateOnly(apt.date) // Extraer solo la fecha
                 };
             }
         };
@@ -445,9 +473,10 @@
             // Debug info
             const debugInfo = useMemo(() => {
                 const todayStr = DateHelper.getTodayString();
-                const todayAppointments = appointments.filter(apt => 
-                    apt.date === todayStr && apt.clinicId === activeClinicId
-                );
+                const todayAppointments = appointments.filter(apt => {
+                    const aptDateStr = DateHelper.extractDateOnly(apt.date);
+                    return aptDateStr === todayStr && apt.clinicId === activeClinicId;
+                });
                 
                 return {
                     appointments: appointments.length,
@@ -461,10 +490,12 @@
                     todayDate: todayStr,
                     sampleAppointments: appointments.slice(0, 3).map(apt => ({
                         id: apt.id,
-                        date: apt.date,
+                        originalDate: apt.date,
+                        extractedDate: DateHelper.extractDateOnly(apt.date),
                         patientName: apt.patientName,
                         doctorId: apt.doctorId,
-                        clinicId: apt.clinicId
+                        clinicId: apt.clinicId,
+                        time: apt.time
                     }))
                 };
             }, [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
@@ -663,11 +694,12 @@
 
             // FUNCIÓN CORREGIDA: getAppointmentsForDate
             const getAppointmentsForDate = (date, doctorId = null, clinicId = null) => {
-                const dateStr = DateHelper.getLocalDateString(date);
+                const dateStr = DateHelper.extractDateOnly(date);
                 const targetClinicId = clinicId || activeClinicId;
                 
                 const filtered = appointments.filter(apt => {
-                    const matchesDate = apt.date === dateStr;
+                    const aptDateStr = DateHelper.extractDateOnly(apt.date);
+                    const matchesDate = aptDateStr === dateStr;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
                     const matchesClinic = apt.clinicId === targetClinicId;
                     
@@ -677,7 +709,14 @@
                 console.log(`📅 getAppointmentsForDate(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
                     found: filtered.length,
                     totalAppointments: appointments.length,
-                    sampleMatches: filtered.slice(0, 2)
+                    searchDate: dateStr,
+                    sampleMatches: filtered.slice(0, 2).map(apt => ({
+                        id: apt.id,
+                        patientName: apt.patientName,
+                        originalDate: apt.date,
+                        extractedDate: DateHelper.extractDateOnly(apt.date),
+                        time: apt.time
+                    }))
                 });
                 
                 return filtered;
@@ -689,7 +728,8 @@
                 const targetClinicId = clinicId || activeClinicId;
                 
                 const filtered = appointments.filter(apt => {
-                    const matchesDate = apt.date === todayStr;
+                    const aptDateStr = DateHelper.extractDateOnly(apt.date);
+                    const matchesDate = aptDateStr === todayStr;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
                     const matchesClinic = apt.clinicId === targetClinicId;
                     
@@ -700,7 +740,14 @@
                     found: filtered.length,
                     todayStr,
                     totalAppointments: appointments.length,
-                    sampleMatches: filtered.slice(0, 2)
+                    searchDate: todayStr,
+                    sampleMatches: filtered.slice(0, 2).map(apt => ({
+                        id: apt.id,
+                        patientName: apt.patientName,
+                        originalDate: apt.date,
+                        extractedDate: DateHelper.extractDateOnly(apt.date),
+                        time: apt.time
+                    }))
                 });
                 
                 return filtered;
@@ -710,14 +757,15 @@
             const getAvailableTimeSlots = (selectedDate, doctorId, clinicId = null) => {
                 if (!selectedDate || !doctorId) return timeSlots;
                 
-                const dateStr = typeof selectedDate === 'string' ? selectedDate : DateHelper.getLocalDateString(selectedDate);
+                const dateStr = DateHelper.extractDateOnly(selectedDate);
                 const targetClinicId = clinicId || activeClinicId;
                 
-                const dayAppointments = appointments.filter(apt => 
-                    apt.date === dateStr && 
-                    apt.doctorId === doctorId && 
-                    apt.clinicId === targetClinicId
-                );
+                const dayAppointments = appointments.filter(apt => {
+                    const aptDateStr = DateHelper.extractDateOnly(apt.date);
+                    return aptDateStr === dateStr && 
+                           apt.doctorId === doctorId && 
+                           apt.clinicId === targetClinicId;
+                });
                 
                 const bookedTimes = dayAppointments.map(apt => apt.time);
                 const available = timeSlots.filter(time => !bookedTimes.includes(time));
@@ -725,7 +773,9 @@
                 console.log(`📅 getAvailableTimeSlots(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
                     total: timeSlots.length,
                     booked: bookedTimes.length,
-                    available: available.length
+                    available: available.length,
+                    bookedTimes,
+                    dayAppointments: dayAppointments.length
                 });
                 
                 return available;
@@ -745,8 +795,9 @@
             };
 
             const isToday = (date) => {
-                const today = new Date();
-                return DateHelper.areSameDate(date, today);
+                const dateStr = DateHelper.extractDateOnly(date);
+                const todayStr = DateHelper.getTodayString();
+                return dateStr === todayStr;
             };
 
             // Generar horas disponibles
@@ -1298,9 +1349,9 @@
             const totalProducts = medications.filter(med => med.clinicId === activeClinicId).length;
             const totalStock = medications.filter(med => med.clinicId === activeClinicId).reduce((sum, med) => sum + med.quantity, 0);
             const todaySales = salesHistory.filter(sale => {
-                const saleDate = new Date(sale.date);
-                const today = new Date();
-                return DateHelper.areSameDate(saleDate, today) && sale.clinicId === activeClinicId;
+                const saleDate = DateHelper.extractDateOnly(sale.date);
+                const today = DateHelper.getTodayString();
+                return saleDate === today && sale.clinicId === activeClinicId;
             });
             const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
             const todayAppointments = getTodayAppointments();
@@ -1352,7 +1403,7 @@
 
                 return (
                     <div className="debug-panel">
-                        <div className="mb-2 font-bold">🔍 Debug Info</div>
+                        <div className="mb-2 font-bold">🔍 Debug Info FIXED</div>
                         <div>Total appointments: {debugInfo.appointments}</div>
                         <div>Active clinic: {debugInfo.activeClinicId}</div>
                         <div>Active doctor: {debugInfo.activeDoctorId}</div>
@@ -1361,7 +1412,17 @@
                         <div>Doctor appointments: {debugInfo.appointmentsForActiveDoctor}</div>
                         <div>Today appointments: {debugInfo.todayAppointments}</div>
                         <div className="mt-2 text-xs overflow-auto max-h-32">
-                            Sample: {JSON.stringify(debugInfo.sampleAppointments, null, 1)}
+                            <div>Sample appointments:</div>
+                            {debugInfo.sampleAppointments.map((apt, i) => (
+                                <div key={i} className="mb-1">
+                                    <div>ID: {apt.id}</div>
+                                    <div>Original: {apt.originalDate}</div>
+                                    <div>Extracted: {apt.extractedDate}</div>
+                                    <div>Patient: {apt.patientName}</div>
+                                    <div>Time: {apt.time}</div>
+                                    <div>---</div>
+                                </div>
+                            ))}
                         </div>
                         <div className="mt-2 text-xs">
                             <button 
