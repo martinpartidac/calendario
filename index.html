@@ -1059,6 +1059,226 @@
             const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
             const todayAppointments = getTodayAppointments();
 
+            // Agregar DESPUÉS de la línea: const todayAppointments = getTodayAppointments();
+
+// Definir allTodayAppointments que está faltando
+const allTodayAppointments = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return appointments.filter(apt => 
+        apt.date === today && apt.clinicId === activeClinicId
+    );
+}, [appointments, activeClinicId]);
+
+// Exponer variables para debug
+useEffect(() => {
+    // Hacer variables accesibles globalmente
+    window.appointments = appointments;
+    window.activeClinicId = activeClinicId;
+    window.activeDoctorId = activeDoctorId;
+    window.activeTab = activeTab;
+    window.setActiveTab = setActiveTab;
+    window.medications = medications;
+    window.salesHistory = salesHistory;
+    window.todayAppointments = todayAppointments;
+    window.allTodayAppointments = allTodayAppointments;
+    window.getDaysInMonth = getDaysInMonth;
+    window.getAppointmentsForDate = getAppointmentsForDate;
+    window.getTodayAppointments = getTodayAppointments;
+    window.currentMonth = currentMonth;
+    
+    console.log('🔗 Variables debug actualizadas:', {
+        appointments: appointments.length,
+        activeClinicId,
+        activeDoctorId,
+        activeTab,
+        todayAppointments: todayAppointments.length,
+        allTodayAppointments: allTodayAppointments.length
+    });
+}, [appointments, activeClinicId, activeDoctorId, activeTab, medications, salesHistory, todayAppointments, allTodayAppointments, currentMonth]);
+
+// Funciones de debug específicas
+useEffect(() => {
+    window.debugAppointmentState = () => {
+        console.log('🔍 APPOINTMENT STATE DEBUG:');
+        console.log('- appointments:', appointments);
+        console.log('- appointments.length:', appointments.length);
+        console.log('- activeClinicId:', activeClinicId);
+        console.log('- activeDoctorId:', activeDoctorId);
+        console.log('- activeTab:', activeTab);
+        console.log('- todayAppointments:', todayAppointments.length);
+        console.log('- allTodayAppointments:', allTodayAppointments.length);
+        
+        // Appointments para clínica activa
+        const clinicAppointments = appointments.filter(apt => apt.clinicId === activeClinicId);
+        console.log('- Appointments para clínica activa:', clinicAppointments.length);
+        
+        // Appointments para médico activo
+        const doctorAppointments = appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId);
+        console.log('- Appointments para médico activo:', doctorAppointments.length);
+        
+        // Appointments por médico
+        console.log('- Appointments por médico:');
+        [1, 2, 3].forEach(doctorId => {
+            const count = appointments.filter(apt => apt.doctorId === doctorId && apt.clinicId === activeClinicId).length;
+            console.log(`  Doctor ${doctorId}: ${count} appointments`);
+        });
+        
+        // Appointments por clínica
+        console.log('- Appointments por clínica:');
+        [1, 2].forEach(clinicId => {
+            const count = appointments.filter(apt => apt.clinicId === clinicId).length;
+            console.log(`  Clínica ${clinicId}: ${count} appointments`);
+        });
+        
+        if (appointments.length > 0) {
+            console.log('📋 Todos los appointments:');
+            appointments.forEach((apt, index) => {
+                console.log(`${index + 1}. ${apt.patientName} - ${apt.date} ${apt.time} - Dr:${apt.doctorId} - Clínica:${apt.clinicId}`);
+            });
+        }
+        
+        return {
+            total: appointments.length,
+            forClinic: clinicAppointments.length,
+            forDoctor: doctorAppointments.length,
+            today: todayAppointments.length
+        };
+    };
+    
+    window.debugCalendarRendering = () => {
+        console.log('🗓️ CALENDAR RENDERING DEBUG:');
+        console.log('- currentMonth:', currentMonth);
+        console.log('- activeDoctorId:', activeDoctorId);
+        console.log('- activeClinicId:', activeClinicId);
+        
+        const days = getDaysInMonth(currentMonth);
+        console.log('- días del mes:', days.length);
+        
+        let totalAppointmentsInCalendar = 0;
+        let daysWithAppointments = 0;
+        
+        days.forEach(day => {
+            if (day.isCurrentMonth) {
+                const dayAppointments = getAppointmentsForDate(day.date, activeDoctorId, activeClinicId);
+                if (dayAppointments.length > 0) {
+                    console.log(`📅 ${day.date.toDateString()}: ${dayAppointments.length} appointments`);
+                    totalAppointmentsInCalendar += dayAppointments.length;
+                    daysWithAppointments++;
+                }
+            }
+        });
+        
+        console.log(`📊 Resumen calendario: ${totalAppointmentsInCalendar} appointments en ${daysWithAppointments} días`);
+        
+        return {
+            totalDays: days.length,
+            daysWithAppointments,
+            totalAppointments: totalAppointmentsInCalendar
+        };
+    };
+    
+    window.switchToAppointmentsTab = () => {
+        console.log('🔄 Cambiando a appointments tab...');
+        setActiveTab('appointments');
+        
+        setTimeout(() => {
+            console.log('📅 En appointments tab');
+            window.debugAppointmentState();
+            window.debugCalendarRendering();
+        }, 500);
+    };
+    
+    window.testDifferentDoctors = () => {
+        console.log('👨‍⚕️ TESTING DIFFERENT DOCTORS:');
+        
+        [1, 2, 3].forEach(doctorId => {
+            const doctorAppointments = appointments.filter(apt => 
+                apt.doctorId === doctorId && apt.clinicId === activeClinicId
+            );
+            console.log(`- Doctor ${doctorId}: ${doctorAppointments.length} appointments`);
+            
+            if (doctorAppointments.length > 0) {
+                console.log(`  Primeros appointments:`, doctorAppointments.slice(0, 2));
+            }
+        });
+    };
+    
+    window.forceAppointmentReload = async () => {
+        console.log('🔄 Forzando recarga de appointments...');
+        
+        try {
+            const result = await API.getAppointments();
+            console.log('📅 Appointments recargados:', result);
+            
+            if (result.success) {
+                setAppointments(result.data || []);
+                console.log('✅ Appointments actualizados en React');
+                return result.data || [];
+            }
+        } catch (error) {
+            console.error('❌ Error:', error);
+        }
+    };
+    
+    console.log('🔗 Funciones de debug creadas');
+}, [appointments, activeClinicId, activeDoctorId, activeTab, todayAppointments, allTodayAppointments, currentMonth]);
+
+// Debug automático cuando cambian los appointments
+useEffect(() => {
+    console.log('🔄 Appointments cambiaron:', appointments.length);
+    
+    if (appointments.length > 0) {
+        console.log('📅 Primer appointment:', appointments[0]);
+        
+        // Verificar estructura
+        const firstApt = appointments[0];
+        console.log('📋 Estructura del appointment:', {
+            id: firstApt.id,
+            patientName: firstApt.patientName,
+            date: firstApt.date,
+            time: firstApt.time,
+            doctorId: firstApt.doctorId,
+            clinicId: firstApt.clinicId,
+            status: firstApt.status
+        });
+        
+        // Verificar tipos de datos
+        console.log('🔍 Tipos de datos:', {
+            'doctorId type': typeof firstApt.doctorId,
+            'clinicId type': typeof firstApt.clinicId,
+            'activeDoctorId type': typeof activeDoctorId,
+            'activeClinicId type': typeof activeClinicId
+        });
+    }
+}, [appointments, activeDoctorId, activeClinicId]);
+
+// Debug automático cuando cambia el tab
+useEffect(() => {
+    console.log('🔄 Tab cambió a:', activeTab);
+    
+    if (activeTab === 'appointments') {
+        console.log('📅 Entrando a appointments tab');
+        console.log('- Total appointments:', appointments.length);
+        console.log('- Clínica activa:', activeClinicId);
+        console.log('- Médico activo:', activeDoctorId);
+        
+        setTimeout(() => {
+            const doctorAppointments = appointments.filter(apt => 
+                apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId
+            );
+            console.log('- Appointments para médico/clínica activos:', doctorAppointments.length);
+            
+            if (doctorAppointments.length === 0) {
+                console.log('❌ No hay appointments para mostrar');
+                console.log('💡 Prueba cambiando de médico o clínica');
+                window.testDifferentDoctors();
+            } else {
+                console.log('✅ Appointments encontrados:', doctorAppointments);
+            }
+        }, 100);
+    }
+}, [activeTab, appointments, activeClinicId, activeDoctorId]);
+
             // Status indicator
             const StatusIndicator = () => {
                 const getStatusInfo = () => {
