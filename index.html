@@ -96,6 +96,59 @@
         // CONFIGURACIÓN DE GOOGLE SHEETS
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcXYtmTfusISzPsLcIc7Nba3WUfAPgpXaFT_K3KdSCw8B_Dn47v69lOuT4Dy7GWMlw/exec';
 
+        // HELPER FUNCTIONS PARA FECHAS
+        const DateHelper = {
+            // Obtener fecha en formato local YYYY-MM-DD
+            getLocalDateString: (date = new Date()) => {
+                const d = new Date(date);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+
+            // Obtener fecha de hoy en formato local
+            getTodayString: () => {
+                return DateHelper.getLocalDateString(new Date());
+            },
+
+            // Comparar si dos fechas son iguales (solo fecha, no hora)
+            areSameDate: (date1, date2) => {
+                const d1 = typeof date1 === 'string' ? date1 : DateHelper.getLocalDateString(date1);
+                const d2 = typeof date2 === 'string' ? date2 : DateHelper.getLocalDateString(date2);
+                return d1 === d2;
+            },
+
+            // Crear Date object desde string YYYY-MM-DD
+            dateFromString: (dateString) => {
+                const [year, month, day] = dateString.split('-').map(Number);
+                return new Date(year, month - 1, day);
+            }
+        };
+
+        // HELPER FUNCTIONS PARA TIPOS DE DATOS
+        const DataHelper = {
+            // Asegurar que ID sea número
+            ensureNumber: (value) => {
+                if (typeof value === 'string' && value !== '') {
+                    const num = parseInt(value, 10);
+                    return isNaN(num) ? value : num;
+                }
+                return typeof value === 'number' ? value : value;
+            },
+
+            // Normalizar appointment data
+            normalizeAppointment: (apt) => {
+                return {
+                    ...apt,
+                    id: DataHelper.ensureNumber(apt.id),
+                    doctorId: DataHelper.ensureNumber(apt.doctorId) || 1,
+                    clinicId: DataHelper.ensureNumber(apt.clinicId) || 1,
+                    date: typeof apt.date === 'string' ? apt.date : DateHelper.getLocalDateString(apt.date)
+                };
+            }
+        };
+
         // Iconos SVG
         const Icons = {
             Package: () => (
@@ -276,7 +329,7 @@
                 return await this.call('addSale', sale);
             },
 
-            // Nuevas funciones para citas
+            // Funciones para citas
             async getAppointments() {
                 const result = await this.call('getAppointments');
                 console.log('📅 Appointments loaded from API:', result);
@@ -347,7 +400,7 @@
 
             const [addStockData, setAddStockData] = useState({
                 quantity: '',
-                date: new Date().toISOString().split('T')[0]
+                date: DateHelper.getTodayString()
             });
 
             // Estados del formulario de citas
@@ -390,19 +443,31 @@
             ];
 
             // Debug info
-            const debugInfo = useMemo(() => ({
-                appointments: appointments.length,
-                activeClinicId,
-                activeDoctorId,
-                activeTab,
-                currentMonth: currentMonth.toLocaleDateString(),
-                appointmentsForActiveClinic: appointments.filter(apt => apt.clinicId === activeClinicId).length,
-                appointmentsForActiveDoctor: appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId).length,
-                todayAppointments: appointments.filter(apt => {
-                    const today = new Date().toISOString().split('T')[0];
-                    return apt.date === today && apt.clinicId === activeClinicId;
-                }).length
-            }), [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
+            const debugInfo = useMemo(() => {
+                const todayStr = DateHelper.getTodayString();
+                const todayAppointments = appointments.filter(apt => 
+                    apt.date === todayStr && apt.clinicId === activeClinicId
+                );
+                
+                return {
+                    appointments: appointments.length,
+                    activeClinicId,
+                    activeDoctorId,
+                    activeTab,
+                    currentMonth: currentMonth.toLocaleDateString(),
+                    appointmentsForActiveClinic: appointments.filter(apt => apt.clinicId === activeClinicId).length,
+                    appointmentsForActiveDoctor: appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId).length,
+                    todayAppointments: todayAppointments.length,
+                    todayDate: todayStr,
+                    sampleAppointments: appointments.slice(0, 3).map(apt => ({
+                        id: apt.id,
+                        date: apt.date,
+                        patientName: apt.patientName,
+                        doctorId: apt.doctorId,
+                        clinicId: apt.clinicId
+                    }))
+                };
+            }, [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
 
             // Verificar conexión y cargar datos
             useEffect(() => {
@@ -436,16 +501,15 @@
                     setMedications(medsResult.data || []);
                     setSalesHistory(salesResult.data || []);
                     
-                    // Ensure appointments have proper structure
-                    const processedAppointments = (appointmentsResult.data || []).map(apt => ({
-                        ...apt,
-                        // Ensure IDs are numbers
-                        id: typeof apt.id === 'string' ? parseInt(apt.id) || apt.id : apt.id,
-                        doctorId: typeof apt.doctorId === 'string' ? parseInt(apt.doctorId) || 1 : apt.doctorId || 1,
-                        clinicId: typeof apt.clinicId === 'string' ? parseInt(apt.clinicId) || 1 : apt.clinicId || 1
-                    }));
+                    // Procesar citas con normalización de datos
+                    const rawAppointments = appointmentsResult.data || [];
+                    const processedAppointments = rawAppointments.map(apt => {
+                        const normalized = DataHelper.normalizeAppointment(apt);
+                        console.log('📅 Normalized appointment:', normalized);
+                        return normalized;
+                    });
                     
-                    console.log('📅 Processed appointments:', processedAppointments);
+                    console.log('📅 Final processed appointments:', processedAppointments);
                     setAppointments(processedAppointments);
                     
                     setConnectionStatus('online');
@@ -464,8 +528,9 @@
                     if (savedSales) setSalesHistory(JSON.parse(savedSales));
                     if (savedAppointments) {
                         const localAppointments = JSON.parse(savedAppointments);
-                        console.log('📅 Loaded appointments from localStorage:', localAppointments);
-                        setAppointments(localAppointments);
+                        const processedLocal = localAppointments.map(apt => DataHelper.normalizeAppointment(apt));
+                        console.log('📅 Loaded appointments from localStorage:', processedLocal);
+                        setAppointments(processedLocal);
                     }
                 } finally {
                     setLoading(false);
@@ -491,15 +556,15 @@
                     total: appointments.length,
                     sample: appointments.slice(0, 3),
                     activeClinicId,
-                    activeDoctorId
+                    activeDoctorId,
+                    todayStr: DateHelper.getTodayString()
                 });
             }, [appointments, activeClinicId, activeDoctorId]);
 
-            // Limpiar la hora seleccionada cuando cambie la fecha o el médico para mostrar horarios disponibles
+            // Limpiar la hora seleccionada cuando cambie la fecha o el médico
             useEffect(() => {
                 if (appointmentForm.date && appointmentForm.doctorId) {
                     const availableSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
-                    // Si la hora actual ya no está disponible (y no estamos editando), limpiarla
                     if (appointmentForm.time && !availableSlots.includes(appointmentForm.time) && !editingAppointment) {
                         setAppointmentForm(prev => ({...prev, time: ''}));
                     }
@@ -556,7 +621,7 @@
                     .slice(0, 5);
             }, [medications, salesHistory, activeClinicId]);
 
-            // Funciones de calendario
+            // Funciones de calendario CORREGIDAS
             const getDaysInMonth = (date) => {
                 const year = date.getFullYear();
                 const month = date.getMonth();
@@ -585,7 +650,7 @@
                 }
                 
                 // Días del próximo mes
-                const remainingDays = 42 - days.length; // 6 weeks * 7 days
+                const remainingDays = 42 - days.length;
                 for (let day = 1; day <= remainingDays; day++) {
                     days.push({
                         date: new Date(year, month + 1, day),
@@ -596,31 +661,74 @@
                 return days;
             };
 
+            // FUNCIÓN CORREGIDA: getAppointmentsForDate
             const getAppointmentsForDate = (date, doctorId = null, clinicId = null) => {
-                const dateStr = date.toISOString().split('T')[0];
+                const dateStr = DateHelper.getLocalDateString(date);
+                const targetClinicId = clinicId || activeClinicId;
+                
                 const filtered = appointments.filter(apt => {
                     const matchesDate = apt.date === dateStr;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
-                    const matchesClinic = clinicId ? apt.clinicId === clinicId : apt.clinicId === activeClinicId;
+                    const matchesClinic = apt.clinicId === targetClinicId;
+                    
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
                 
-                console.log(`📅 getAppointmentsForDate(${dateStr}, doctor:${doctorId}, clinic:${clinicId}):`, filtered.length);
+                console.log(`📅 getAppointmentsForDate(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
+                    found: filtered.length,
+                    totalAppointments: appointments.length,
+                    sampleMatches: filtered.slice(0, 2)
+                });
+                
                 return filtered;
             };
 
+            // FUNCIÓN CORREGIDA: getTodayAppointments
+            const getTodayAppointments = (doctorId = null, clinicId = null) => {
+                const todayStr = DateHelper.getTodayString();
+                const targetClinicId = clinicId || activeClinicId;
+                
+                const filtered = appointments.filter(apt => {
+                    const matchesDate = apt.date === todayStr;
+                    const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
+                    const matchesClinic = apt.clinicId === targetClinicId;
+                    
+                    return matchesDate && matchesDoctor && matchesClinic;
+                });
+                
+                console.log(`📅 getTodayAppointments(doctor:${doctorId}, clinic:${targetClinicId}):`, {
+                    found: filtered.length,
+                    todayStr,
+                    totalAppointments: appointments.length,
+                    sampleMatches: filtered.slice(0, 2)
+                });
+                
+                return filtered;
+            };
+
+            // FUNCIÓN CORREGIDA: getAvailableTimeSlots
             const getAvailableTimeSlots = (selectedDate, doctorId, clinicId = null) => {
                 if (!selectedDate || !doctorId) return timeSlots;
                 
-                const dateStr = typeof selectedDate === 'string' ? selectedDate : selectedDate.toISOString().split('T')[0];
+                const dateStr = typeof selectedDate === 'string' ? selectedDate : DateHelper.getLocalDateString(selectedDate);
+                const targetClinicId = clinicId || activeClinicId;
+                
                 const dayAppointments = appointments.filter(apt => 
                     apt.date === dateStr && 
                     apt.doctorId === doctorId && 
-                    apt.clinicId === (clinicId || activeClinicId)
+                    apt.clinicId === targetClinicId
                 );
-                const bookedTimes = dayAppointments.map(apt => apt.time);
                 
-                return timeSlots.filter(time => !bookedTimes.includes(time));
+                const bookedTimes = dayAppointments.map(apt => apt.time);
+                const available = timeSlots.filter(time => !bookedTimes.includes(time));
+                
+                console.log(`📅 getAvailableTimeSlots(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
+                    total: timeSlots.length,
+                    booked: bookedTimes.length,
+                    available: available.length
+                });
+                
+                return available;
             };
 
             const handleDayClick = (date, doctorId) => {
@@ -629,30 +737,32 @@
                 setSelectedDayAppointments(dayAppointments);
                 setAppointmentForm({
                     ...appointmentForm,
-                    date: date.toISOString().split('T')[0],
+                    date: DateHelper.getLocalDateString(date),
                     doctorId: doctorId,
                     clinicId: activeClinicId
                 });
                 setShowDayAppointments(true);
             };
 
-            const getTodayAppointments = (doctorId = null, clinicId = null) => {
-                const today = new Date().toISOString().split('T')[0];
-                const filtered = appointments.filter(apt => {
-                    const matchesDate = apt.date === today;
-                    const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
-                    const matchesClinic = clinicId ? apt.clinicId === clinicId : apt.clinicId === activeClinicId;
-                    return matchesDate && matchesDoctor && matchesClinic;
-                });
-                
-                console.log(`📅 getTodayAppointments(doctor:${doctorId}, clinic:${clinicId}):`, filtered.length);
-                return filtered;
-            };
-
             const isToday = (date) => {
                 const today = new Date();
-                return date.toDateString() === today.toDateString();
+                return DateHelper.areSameDate(date, today);
             };
+
+            // Generar horas disponibles
+            const generateTimeSlots = () => {
+                const slots = [];
+                for (let hour = 8; hour <= 17; hour++) {
+                    for (let minute = 0; minute < 60; minute += 30) {
+                        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                        slots.push(timeString);
+                    }
+                }
+                return slots;
+            };
+
+            const timeSlots = generateTimeSlots();
+            const availableTimeSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
 
             // Funciones CRUD para medicamentos (mantener las existentes)
             const addMedication = async () => {
@@ -791,7 +901,7 @@
                     ));
 
                     setShowAddStock(null);
-                    setAddStockData({ quantity: '', date: new Date().toISOString().split('T')[0] });
+                    setAddStockData({ quantity: '', date: DateHelper.getTodayString() });
                     alert('Stock agregado exitosamente');
 
                 } catch (error) {
@@ -803,14 +913,14 @@
                 }
             };
 
-            // Funciones CRUD para citas
+            // Funciones CRUD para citas CORREGIDAS
             const addAppointment = async () => {
                 if (!appointmentForm.patientName || !appointmentForm.date || !appointmentForm.time || !appointmentForm.doctorId) {
                     alert('Por favor complete todos los campos obligatorios (nombre, fecha, hora y médico)');
                     return;
                 }
 
-                // Verificar si ya existe una cita en el mismo horario para el mismo médico en la misma clínica
+                // Verificar disponibilidad
                 const existingAppointment = appointments.find(apt => 
                     apt.date === appointmentForm.date && 
                     apt.time === appointmentForm.time &&
@@ -851,8 +961,9 @@
                         setLastSync(new Date());
                     }
 
+                    const normalizedAppointment = DataHelper.normalizeAppointment(newAppointment);
                     setAppointments(prev => {
-                        const updated = [...prev, newAppointment];
+                        const updated = [...prev, normalizedAppointment];
                         console.log('📅 Appointments updated, total:', updated.length);
                         return updated;
                     });
@@ -876,7 +987,7 @@
                     return;
                 }
 
-                // Verificar si ya existe una cita en el mismo horario para el mismo médico en la misma clínica (excluyendo la cita actual)
+                // Verificar disponibilidad
                 const existingAppointment = appointments.find(apt => 
                     apt.date === appointmentForm.date && 
                     apt.time === appointmentForm.time &&
@@ -916,8 +1027,9 @@
                         setLastSync(new Date());
                     }
                     
+                    const normalizedAppointment = DataHelper.normalizeAppointment(updatedAppointment);
                     setAppointments(prev => prev.map(apt => 
-                        apt.id === editingAppointment.id ? updatedAppointment : apt
+                        apt.id === editingAppointment.id ? normalizedAppointment : apt
                     ));
                     
                     resetAppointmentForm();
@@ -1082,7 +1194,7 @@
                     patientName: 'Paciente Test',
                     phone: '123-456-7890',
                     email: 'test@test.com',
-                    date: new Date().toISOString().split('T')[0],
+                    date: DateHelper.getTodayString(),
                     time: '09:00',
                     type: 'Consulta',
                     notes: 'Cita de prueba',
@@ -1098,7 +1210,8 @@
                     if (connectionStatus === 'online') {
                         await API.addAppointment(testAppointment);
                     }
-                    setAppointments(prev => [...prev, testAppointment]);
+                    const normalizedAppointment = DataHelper.normalizeAppointment(testAppointment);
+                    setAppointments(prev => [...prev, normalizedAppointment]);
                     alert('Cita de prueba agregada');
                 } catch (error) {
                     console.error('Error in test:', error);
@@ -1116,7 +1229,7 @@
                     doctors,
                     activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '3.0'
+                    version: '3.1'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -1126,7 +1239,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `farmacia_backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `farmacia_backup_${DateHelper.getTodayString()}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -1187,25 +1300,10 @@
             const todaySales = salesHistory.filter(sale => {
                 const saleDate = new Date(sale.date);
                 const today = new Date();
-                return saleDate.toDateString() === today.toDateString() && sale.clinicId === activeClinicId;
+                return DateHelper.areSameDate(saleDate, today) && sale.clinicId === activeClinicId;
             });
             const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
             const todayAppointments = getTodayAppointments();
-
-            // Generar horas disponibles
-            const generateTimeSlots = () => {
-                const slots = [];
-                for (let hour = 8; hour <= 17; hour++) {
-                    for (let minute = 0; minute < 60; minute += 30) {
-                        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        slots.push(timeString);
-                    }
-                }
-                return slots;
-            };
-
-            const timeSlots = generateTimeSlots();
-            const availableTimeSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
 
             // Status indicator
             const StatusIndicator = () => {
@@ -1258,10 +1356,13 @@
                         <div>Total appointments: {debugInfo.appointments}</div>
                         <div>Active clinic: {debugInfo.activeClinicId}</div>
                         <div>Active doctor: {debugInfo.activeDoctorId}</div>
-                        <div>Active tab: {debugInfo.activeTab}</div>
+                        <div>Today date: {debugInfo.todayDate}</div>
                         <div>Clinic appointments: {debugInfo.appointmentsForActiveClinic}</div>
                         <div>Doctor appointments: {debugInfo.appointmentsForActiveDoctor}</div>
                         <div>Today appointments: {debugInfo.todayAppointments}</div>
+                        <div className="mt-2 text-xs overflow-auto max-h-32">
+                            Sample: {JSON.stringify(debugInfo.sampleAppointments, null, 1)}
+                        </div>
                         <div className="mt-2 text-xs">
                             <button 
                                 onClick={testAddAppointment}
@@ -1270,7 +1371,7 @@
                                 Test Add
                             </button>
                             <button 
-                                onClick={() => console.log('Appointments:', appointments)}
+                                onClick={() => console.log('All appointments:', appointments)}
                                 className="bg-green-500 text-white px-2 py-1 rounded"
                             >
                                 Log All
@@ -2498,7 +2599,7 @@
                                         <button
                                             onClick={() => {
                                                 setShowAddStock(null);
-                                                setAddStockData({ quantity: '', date: new Date().toISOString().split('T')[0] });
+                                                setAddStockData({ quantity: '', date: DateHelper.getTodayString() });
                                             }}
                                             className="text-gray-400 hover:text-gray-600 transition-colors"
                                         >
@@ -2545,7 +2646,7 @@
                                             <button
                                                 onClick={() => {
                                                     setShowAddStock(null);
-                                                    setAddStockData({ quantity: '', date: new Date().toISOString().split('T')[0] });
+                                                    setAddStockData({ quantity: '', date: DateHelper.getTodayString() });
                                                 }}
                                                 disabled={loading}
                                                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -2806,7 +2907,7 @@
                                             onClick={() => {
                                                 setAppointmentForm({
                                                     ...appointmentForm,
-                                                    date: selectedDayDate.toISOString().split('T')[0],
+                                                    date: DateHelper.getLocalDateString(selectedDayDate),
                                                     doctorId: activeDoctorId
                                                 });
                                                 setShowDayAppointments(false);
