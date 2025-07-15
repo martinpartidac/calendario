@@ -1,0 +1,2471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farmacia Alcala Adame - Sistema de Punto de Venta</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .loading {
+            border: 2px solid #f3f4f6;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .online {
+            background-color: #d1fae5;
+            border: 2px solid #10b981;
+            color: #065f46;
+        }
+        .offline {
+            background-color: #fef3c7;
+            border: 2px solid #f59e0b;
+            color: #92400e;
+        }
+        .error {
+            background-color: #fee2e2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+        }
+        .calendar-day {
+            min-height: 100px;
+            border: 1px solid #e5e7eb;
+        }
+        .calendar-day:hover {
+            background-color: #f9fafb;
+        }
+        .calendar-day.today {
+            background-color: #dbeafe;
+            border-color: #3b82f6;
+        }
+        .calendar-day.other-month {
+            color: #9ca3af;
+            background-color: #f9fafb;
+        }
+        .appointment-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+        }
+        .appointment-item {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin: 1px 0;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // CONFIGURACIÓN DE GOOGLE SHEETS
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyhs3YpDVZdjTuFp5FLZKl0_pubvR5fpLI75vM-s22TO2tLEXg7ecNvIJmYW0CEsSoh/exec';
+
+        // Iconos SVG
+        const Icons = {
+            Package: () => (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+            ),
+            Search: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            ),
+            Plus: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+            ),
+            ShoppingCart: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13v8a2 2 0 002 2h8a2 2 0 002-2v-8" />
+                </svg>
+            ),
+            AlertTriangle: () => (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+            ),
+            TrendingUp: () => (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+            ),
+            Download: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+            ),
+            Cloud: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                </svg>
+            ),
+            Sync: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            ),
+            X: () => (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            ),
+            Edit: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+            ),
+            Trash: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            ),
+            Check: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+            ),
+            Grid: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+            ),
+            List: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+            ),
+            Calendar: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            ),
+            Clock: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            ),
+            User: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+            ),
+            ChevronLeft: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+            ),
+            ChevronRight: () => (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+            )
+        };
+
+        // API Functions para Google Sheets
+        const API = {
+            async call(action, data = {}) {
+                try {
+                    const formData = new FormData();
+                    formData.append('action', action);
+                    
+                    if (data && Object.keys(data).length > 0) {
+                        if (action === 'deleteMedication' || action === 'deleteAppointment') {
+                            formData.append('id', data.toString());
+                        } else {
+                            formData.append('data', JSON.stringify(data));
+                        }
+                    }
+
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || 'Error desconocido');
+                    }
+
+                    return result;
+                } catch (error) {
+                    console.error('API Error:', error);
+                    throw error;
+                }
+            },
+
+            async test() {
+                return await this.call('test');
+            },
+
+            async getMedications() {
+                return await this.call('getMedications');
+            },
+
+            async addMedication(medication) {
+                return await this.call('addMedication', medication);
+            },
+
+            async updateMedication(medication) {
+                return await this.call('updateMedication', medication);
+            },
+
+            async deleteMedication(id) {
+                console.log('API: Deleting medication with ID:', id);
+                const result = await this.call('deleteMedication', id);
+                console.log('API: Delete result:', result);
+                return result;
+            },
+
+            async getSales() {
+                return await this.call('getSales');
+            },
+
+            async addSale(sale) {
+                return await this.call('addSale', sale);
+            },
+
+            // Nuevas funciones para citas
+            async getAppointments() {
+                return await this.call('getAppointments');
+            },
+
+            async addAppointment(appointment) {
+                return await this.call('addAppointment', appointment);
+            },
+
+            async updateAppointment(appointment) {
+                return await this.call('updateAppointment', appointment);
+            },
+
+            async deleteAppointment(id) {
+                console.log('API: Deleting appointment with ID:', id);
+                const result = await this.call('deleteAppointment', id);
+                console.log('API: Delete appointment result:', result);
+                return result;
+            }
+        };
+
+        const PharmacyPOS = () => {
+            // Estados principales
+            const [medications, setMedications] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [viewMode, setViewMode] = useState('grid');
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [cart, setCart] = useState([]);
+            const [salesHistory, setSalesHistory] = useState([]);
+            const [appointments, setAppointments] = useState([]);
+            const [showAddForm, setShowAddForm] = useState(false);
+            const [editingMed, setEditingMed] = useState(null);
+            const [showAddStock, setShowAddStock] = useState(null);
+            const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+            const [editingAppointment, setEditingAppointment] = useState(null);
+            const [selectedDate, setSelectedDate] = useState(new Date());
+            const [currentMonth, setCurrentMonth] = useState(new Date());
+            const [showDayAppointments, setShowDayAppointments] = useState(false);
+            const [selectedDayAppointments, setSelectedDayAppointments] = useState([]);
+            const [selectedDayDate, setSelectedDayDate] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [connectionStatus, setConnectionStatus] = useState('checking');
+            const [lastSync, setLastSync] = useState(null);
+
+            // Estados del formulario
+            const [formData, setFormData] = useState({
+                name: '',
+                presentation: 'Tabletas',
+                activeSubstance: '',
+                unitPrice: '',
+                publicPrice: '',
+                quantity: '',
+                minStock: '5',
+                representative: '',
+                phone: ''
+            });
+
+            const [addStockData, setAddStockData] = useState({
+                quantity: '',
+                date: new Date().toISOString().split('T')[0]
+            });
+
+            // Estados del formulario de citas
+            const [appointmentForm, setAppointmentForm] = useState({
+                patientName: '',
+                phone: '',
+                email: '',
+                date: '',
+                time: '',
+                type: 'Consulta',
+                notes: '',
+                status: 'Programada'
+            });
+
+            const presentations = [
+                'Tabletas', 'Cápsulas', 'Jarabe', 'Inyección', 
+                'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel'
+            ];
+
+            const appointmentTypes = [
+                'Consulta', 'Seguimiento', 'Revisión de medicamentos', 
+                'Presión arterial', 'Diabetes', 'Vacunación', 'Otros'
+            ];
+
+            const appointmentStatuses = [
+                'Programada', 'Confirmada', 'En progreso', 'Completada', 'Cancelada', 'No asistió'
+            ];
+
+            // Verificar conexión y cargar datos
+            useEffect(() => {
+                loadInitialData();
+            }, []);
+
+            const loadInitialData = async () => {
+                try {
+                    setLoading(true);
+                    setConnectionStatus('checking');
+                    
+                    // Test connection first
+                    const testResult = await API.test();
+                    console.log('Connection test:', testResult);
+                    
+                    // Load data
+                    const [medsResult, salesResult, appointmentsResult] = await Promise.all([
+                        API.getMedications(),
+                        API.getSales(),
+                        API.getAppointments()
+                    ]);
+
+                    setMedications(medsResult.data || []);
+                    setSalesHistory(salesResult.data || []);
+                    setAppointments(appointmentsResult.data || []);
+                    setConnectionStatus('online');
+                    setLastSync(new Date());
+
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    setConnectionStatus('error');
+                    
+                    // Fallback a localStorage
+                    const savedMeds = localStorage.getItem('pharmacy_medications');
+                    const savedSales = localStorage.getItem('pharmacy_sales');
+                    const savedAppointments = localStorage.getItem('pharmacy_appointments');
+                    
+                    if (savedMeds) setMedications(JSON.parse(savedMeds));
+                    if (savedSales) setSalesHistory(JSON.parse(savedSales));
+                    if (savedAppointments) setAppointments(JSON.parse(savedAppointments));
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Guardar en localStorage como backup
+            useEffect(() => {
+                localStorage.setItem('pharmacy_medications', JSON.stringify(medications));
+            }, [medications]);
+
+            useEffect(() => {
+                localStorage.setItem('pharmacy_sales', JSON.stringify(salesHistory));
+            }, [salesHistory]);
+
+            useEffect(() => {
+                localStorage.setItem('pharmacy_appointments', JSON.stringify(appointments));
+            }, [appointments]);
+
+            // Limpiar la hora seleccionada cuando cambie la fecha para mostrar horarios disponibles
+            useEffect(() => {
+                if (appointmentForm.date && appointmentForm.time) {
+                    const availableSlots = getAvailableTimeSlots(appointmentForm.date);
+                    // Si la hora actual ya no está disponible (y no estamos editando), limpiarla
+                    if (!availableSlots.includes(appointmentForm.time) && !editingAppointment) {
+                        setAppointmentForm(prev => ({...prev, time: ''}));
+                    }
+                }
+            }, [appointmentForm.date, appointments, editingAppointment]);
+
+            // Búsqueda inteligente
+            const filteredMedications = useMemo(() => {
+                if (!searchTerm) return medications;
+                
+                const term = searchTerm.toLowerCase();
+                return medications.filter(med => {
+                    const searchFields = [
+                        med.name || '',
+                        med.activeSubstance || '',
+                        med.representative || '',
+                        med.phone || '',
+                        med.presentation || ''
+                    ].join(' ').toLowerCase();
+                    
+                    return searchFields.includes(term);
+                });
+            }, [medications, searchTerm]);
+
+            // Medicamentos con stock bajo
+            const lowStockMeds = medications.filter(med => med.quantity <= med.minStock);
+
+            // Medicamentos más vendidos
+            const topSellingMeds = useMemo(() => {
+                const salesCount = {};
+                salesHistory.forEach(sale => {
+                    if (sale.items && Array.isArray(sale.items)) {
+                        sale.items.forEach(item => {
+                            salesCount[item.id] = (salesCount[item.id] || 0) + item.quantity;
+                        });
+                    }
+                });
+
+                return medications
+                    .map(med => ({
+                        ...med,
+                        totalSold: salesCount[med.id] || 0
+                    }))
+                    .sort((a, b) => b.totalSold - a.totalSold)
+                    .slice(0, 5);
+            }, [medications, salesHistory]);
+
+            // Funciones de calendario
+            const getDaysInMonth = (date) => {
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                const daysInMonth = lastDay.getDate();
+                const startingDayOfWeek = firstDay.getDay();
+                
+                const days = [];
+                
+                // Días del mes anterior
+                const prevMonth = new Date(year, month - 1, 0);
+                for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+                    days.push({
+                        date: new Date(year, month - 1, prevMonth.getDate() - i),
+                        isCurrentMonth: false
+                    });
+                }
+                
+                // Días del mes actual
+                for (let day = 1; day <= daysInMonth; day++) {
+                    days.push({
+                        date: new Date(year, month, day),
+                        isCurrentMonth: true
+                    });
+                }
+                
+                // Días del próximo mes
+                const remainingDays = 42 - days.length; // 6 weeks * 7 days
+                for (let day = 1; day <= remainingDays; day++) {
+                    days.push({
+                        date: new Date(year, month + 1, day),
+                        isCurrentMonth: false
+                    });
+                }
+                
+                return days;
+            };
+
+            const getAppointmentsForDate = (date) => {
+                const dateStr = date.toISOString().split('T')[0];
+                return appointments.filter(apt => apt.date === dateStr);
+            };
+
+            const getAvailableTimeSlots = (selectedDate) => {
+                if (!selectedDate) return timeSlots;
+                
+                const dateStr = typeof selectedDate === 'string' ? selectedDate : selectedDate.toISOString().split('T')[0];
+                const dayAppointments = appointments.filter(apt => apt.date === dateStr);
+                const bookedTimes = dayAppointments.map(apt => apt.time);
+                
+                return timeSlots.filter(time => !bookedTimes.includes(time));
+            };
+
+            const handleDayClick = (date) => {
+                const dayAppointments = getAppointmentsForDate(date);
+                setSelectedDayDate(date);
+                setSelectedDayAppointments(dayAppointments);
+                setShowDayAppointments(true);
+            };
+
+            const getTodayAppointments = () => {
+                const today = new Date().toISOString().split('T')[0];
+                return appointments.filter(apt => apt.date === today);
+            };
+
+            const isToday = (date) => {
+                const today = new Date();
+                return date.toDateString() === today.toDateString();
+            };
+
+            // Funciones CRUD para medicamentos (mantener las existentes)
+            const addMedication = async () => {
+                if (!formData.name || !formData.unitPrice || !formData.publicPrice || !formData.quantity) {
+                    alert('Por favor complete todos los campos obligatorios (nombre, precios y cantidad)');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+                    
+                    const newMed = {
+                        id: Date.now(),
+                        name: formData.name,
+                        presentation: formData.presentation,
+                        activeSubstance: formData.activeSubstance,
+                        unitPrice: parseFloat(formData.unitPrice) || 0,
+                        publicPrice: parseFloat(formData.publicPrice) || 0,
+                        quantity: parseInt(formData.quantity) || 0,
+                        minStock: parseInt(formData.minStock) || 5,
+                        representative: formData.representative,
+                        phone: formData.phone,
+                        dateAdded: new Date().toISOString()
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.addMedication(newMed);
+                        setLastSync(new Date());
+                    }
+
+                    setMedications(prev => [...prev, newMed]);
+                    resetForm();
+                    setShowAddForm(false);
+                    alert('Medicamento agregado exitosamente');
+
+                } catch (error) {
+                    console.error('Error adding medication:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updateMedication = async () => {
+                if (!formData.name || !formData.unitPrice || !formData.publicPrice || !formData.quantity) {
+                    alert('Por favor complete todos los campos obligatorios');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+
+                    const updatedMed = {
+                        ...editingMed,
+                        name: formData.name,
+                        presentation: formData.presentation,
+                        activeSubstance: formData.activeSubstance,
+                        unitPrice: parseFloat(formData.unitPrice) || 0,
+                        publicPrice: parseFloat(formData.publicPrice) || 0,
+                        quantity: parseInt(formData.quantity) || 0,
+                        minStock: parseInt(formData.minStock) || 5,
+                        representative: formData.representative,
+                        phone: formData.phone
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.updateMedication(updatedMed);
+                        setLastSync(new Date());
+                    }
+                    
+                    setMedications(prev => prev.map(med => 
+                        med.id === editingMed.id ? updatedMed : med
+                    ));
+                    resetForm();
+                    setEditingMed(null);
+                    alert('Medicamento actualizado exitosamente');
+
+                } catch (error) {
+                    console.error('Error updating medication:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const deleteMedication = async (id) => {
+                if (!confirm('¿Está seguro de eliminar este medicamento?')) return;
+
+                try {
+                    setLoading(true);
+
+                    if (connectionStatus === 'online') {
+                        await API.deleteMedication(id);
+                        setLastSync(new Date());
+                    }
+
+                    setMedications(prev => prev.filter(med => med.id !== id));
+                    alert('Medicamento eliminado exitosamente');
+
+                } catch (error) {
+                    console.error('Error deleting medication:', error);
+                    setConnectionStatus('error');
+                    
+                    setMedications(prev => prev.filter(med => med.id !== id));
+                    alert('Error al sincronizar con Google Sheets, pero se eliminó localmente.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const addStock = async () => {
+                if (!addStockData.quantity || parseInt(addStockData.quantity) <= 0) {
+                    alert('Por favor ingrese una cantidad válida');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+                    const addedQuantity = parseInt(addStockData.quantity);
+                    
+                    const updatedMed = {
+                        ...showAddStock,
+                        quantity: showAddStock.quantity + addedQuantity
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.updateMedication(updatedMed);
+                        setLastSync(new Date());
+                    }
+
+                    setMedications(prev => prev.map(med => 
+                        med.id === showAddStock.id ? updatedMed : med
+                    ));
+
+                    setShowAddStock(null);
+                    setAddStockData({ quantity: '', date: new Date().toISOString().split('T')[0] });
+                    alert('Stock agregado exitosamente');
+
+                } catch (error) {
+                    console.error('Error adding stock:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Funciones CRUD para citas
+            const addAppointment = async () => {
+                if (!appointmentForm.patientName || !appointmentForm.date || !appointmentForm.time) {
+                    alert('Por favor complete todos los campos obligatorios (nombre, fecha y hora)');
+                    return;
+                }
+
+                // Verificar si ya existe una cita en el mismo horario
+                const existingAppointment = appointments.find(apt => 
+                    apt.date === appointmentForm.date && 
+                    apt.time === appointmentForm.time &&
+                    (!editingAppointment || apt.id !== editingAppointment.id)
+                );
+
+                if (existingAppointment) {
+                    alert(`Ya existe una cita programada para las ${appointmentForm.time} el ${appointmentForm.date}. Por favor seleccione otro horario.`);
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+                    
+                    const newAppointment = {
+                        id: Date.now(),
+                        patientName: appointmentForm.patientName,
+                        phone: appointmentForm.phone,
+                        email: appointmentForm.email,
+                        date: appointmentForm.date,
+                        time: appointmentForm.time,
+                        type: appointmentForm.type,
+                        notes: appointmentForm.notes,
+                        status: appointmentForm.status,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.addAppointment(newAppointment);
+                        setLastSync(new Date());
+                    }
+
+                    setAppointments(prev => [...prev, newAppointment]);
+                    resetAppointmentForm();
+                    setShowAppointmentForm(false);
+                    alert('Cita agregada exitosamente');
+
+                } catch (error) {
+                    console.error('Error adding appointment:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updateAppointment = async () => {
+                if (!appointmentForm.patientName || !appointmentForm.date || !appointmentForm.time) {
+                    alert('Por favor complete todos los campos obligatorios');
+                    return;
+                }
+
+                // Verificar si ya existe una cita en el mismo horario (excluyendo la cita actual)
+                const existingAppointment = appointments.find(apt => 
+                    apt.date === appointmentForm.date && 
+                    apt.time === appointmentForm.time &&
+                    apt.id !== editingAppointment.id
+                );
+
+                if (existingAppointment) {
+                    alert(`Ya existe una cita programada para las ${appointmentForm.time} el ${appointmentForm.date}. Por favor seleccione otro horario.`);
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+
+                    const updatedAppointment = {
+                        ...editingAppointment,
+                        patientName: appointmentForm.patientName,
+                        phone: appointmentForm.phone,
+                        email: appointmentForm.email,
+                        date: appointmentForm.date,
+                        time: appointmentForm.time,
+                        type: appointmentForm.type,
+                        notes: appointmentForm.notes,
+                        status: appointmentForm.status
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.updateAppointment(updatedAppointment);
+                        setLastSync(new Date());
+                    }
+                    
+                    setAppointments(prev => prev.map(apt => 
+                        apt.id === editingAppointment.id ? updatedAppointment : apt
+                    ));
+                    resetAppointmentForm();
+                    setEditingAppointment(null);
+                    alert('Cita actualizada exitosamente');
+
+                } catch (error) {
+                    console.error('Error updating appointment:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const deleteAppointment = async (id) => {
+                if (!confirm('¿Está seguro de eliminar esta cita?')) return;
+
+                try {
+                    setLoading(true);
+
+                    if (connectionStatus === 'online') {
+                        await API.deleteAppointment(id);
+                        setLastSync(new Date());
+                    }
+
+                    setAppointments(prev => prev.filter(apt => apt.id !== id));
+                    alert('Cita eliminada exitosamente');
+
+                } catch (error) {
+                    console.error('Error deleting appointment:', error);
+                    setConnectionStatus('error');
+                    
+                    setAppointments(prev => prev.filter(apt => apt.id !== id));
+                    alert('Error al sincronizar con Google Sheets, pero se eliminó localmente.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Funciones del carrito (mantener las existentes)
+            const addToCart = (med) => {
+                if (med.quantity <= 0) {
+                    alert('No hay stock disponible para este medicamento');
+                    return;
+                }
+
+                const existingItem = cart.find(item => item.id === med.id);
+                if (existingItem) {
+                    if (existingItem.quantity >= med.quantity) {
+                        alert('No hay más stock disponible');
+                        return;
+                    }
+                    setCart(cart.map(item => 
+                        item.id === med.id 
+                            ? { ...item, quantity: item.quantity + 1 }
+                            : item
+                    ));
+                } else {
+                    setCart(prev => [...prev, { ...med, quantity: 1 }]);
+                }
+            };
+
+            const updateCartQuantity = (id, quantity) => {
+                if (quantity <= 0) {
+                    setCart(prev => prev.filter(item => item.id !== id));
+                } else {
+                    const med = medications.find(m => m.id === id);
+                    if (quantity > med.quantity) {
+                        alert('No hay suficiente stock disponible');
+                        return;
+                    }
+                    setCart(prev => prev.map(item => 
+                        item.id === id 
+                            ? { ...item, quantity: quantity }
+                            : item
+                    ));
+                }
+            };
+
+            const processSale = async () => {
+                if (cart.length === 0) {
+                    alert('El carrito está vacío');
+                    return;
+                }
+
+                // Verificar stock disponible
+                for (const cartItem of cart) {
+                    const med = medications.find(m => m.id === cartItem.id);
+                    if (cartItem.quantity > med.quantity) {
+                        alert(`No hay suficiente stock para ${med.name}`);
+                        return;
+                    }
+                }
+
+                try {
+                    setLoading(true);
+
+                    // Crear la venta
+                    const sale = {
+                        id: Date.now(),
+                        items: cart.map(item => ({
+                            id: item.id,
+                            name: item.name,
+                            presentation: item.presentation,
+                            quantity: item.quantity,
+                            unitPrice: item.publicPrice,
+                            total: item.publicPrice * item.quantity
+                        })),
+                        total: cart.reduce((sum, item) => sum + (item.publicPrice * item.quantity), 0),
+                        date: new Date().toISOString()
+                    };
+
+                    // Actualizar stock
+                    const updatedMeds = medications.map(med => {
+                        const cartItem = cart.find(item => item.id === med.id);
+                        if (cartItem) {
+                            return {
+                                ...med,
+                                quantity: med.quantity - cartItem.quantity
+                            };
+                        }
+                        return med;
+                    });
+
+                    if (connectionStatus === 'online') {
+                        // Actualizar medicamentos en Google Sheets
+                        for (const cartItem of cart) {
+                            const updatedMed = updatedMeds.find(med => med.id === cartItem.id);
+                            await API.updateMedication(updatedMed);
+                        }
+                        
+                        // Guardar venta en Google Sheets
+                        await API.addSale(sale);
+                        setLastSync(new Date());
+                    }
+
+                    setMedications(updatedMeds);
+                    setSalesHistory(prev => [...prev, sale]);
+                    setCart([]);
+                    alert(`Venta procesada exitosamente. Total: $${sale.total.toFixed(2)}`);
+
+                } catch (error) {
+                    console.error('Error processing sale:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero la venta se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Backup manual
+            const backupData = () => {
+                const data = {
+                    medications,
+                    salesHistory,
+                    appointments,
+                    exportDate: new Date().toISOString(),
+                    version: '2.1'
+                };
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], {
+                    type: 'application/json'
+                });
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `farmacia_backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const manualSync = async () => {
+                try {
+                    setLoading(true);
+                    setConnectionStatus('checking');
+                    
+                    const testResult = await API.test();
+                    console.log('Manual sync test:', testResult);
+                    
+                    await loadInitialData();
+                    alert('Sincronización exitosa');
+                } catch (error) {
+                    setConnectionStatus('error');
+                    alert('Error en la sincronización');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const resetForm = () => {
+                setFormData({
+                    name: '',
+                    presentation: 'Tabletas',
+                    activeSubstance: '',
+                    unitPrice: '',
+                    publicPrice: '',
+                    quantity: '',
+                    minStock: '5',
+                    representative: '',
+                    phone: ''
+                });
+            };
+
+            const resetAppointmentForm = () => {
+                setAppointmentForm({
+                    patientName: '',
+                    phone: '',
+                    email: '',
+                    date: '',
+                    time: '',
+                    type: 'Consulta',
+                    notes: '',
+                    status: 'Programada'
+                });
+            };
+
+            // Calculados del dashboard
+            const totalProducts = medications.length;
+            const totalStock = medications.reduce((sum, med) => sum + med.quantity, 0);
+            const todaySales = salesHistory.filter(sale => {
+                const saleDate = new Date(sale.date);
+                const today = new Date();
+                return saleDate.toDateString() === today.toDateString();
+            });
+            const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+            const todayAppointments = getTodayAppointments();
+
+            // Status indicator
+            const StatusIndicator = () => {
+                const getStatusInfo = () => {
+                    switch(connectionStatus) {
+                        case 'online':
+                            return {
+                                className: 'online',
+                                icon: <Icons.Cloud />,
+                                text: `En línea - Google Sheets ${lastSync ? '(Sincronizado: ' + lastSync.toLocaleTimeString() + ')' : ''}`
+                            };
+                        case 'error':
+                            return {
+                                className: 'error',
+                                icon: <Icons.AlertTriangle />,
+                                text: 'Error de conexión - Usando datos locales'
+                            };
+                        case 'checking':
+                            return {
+                                className: 'offline',
+                                icon: <div className="loading"></div>,
+                                text: 'Verificando conexión...'
+                            };
+                        default:
+                            return {
+                                className: 'offline',
+                                icon: <Icons.Package />,
+                                text: 'Modo local'
+                            };
+                    }
+                };
+
+                const { className, icon, text } = getStatusInfo();
+
+                return (
+                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${className}`}>
+                        {icon}
+                        {text}
+                    </div>
+                );
+            };
+
+            // Generar horas disponibles
+            const generateTimeSlots = () => {
+                const slots = [];
+                for (let hour = 8; hour <= 17; hour++) {
+                    for (let minute = 0; minute < 60; minute += 30) {
+                        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                        slots.push(timeString);
+                    }
+                }
+                return slots;
+            };
+
+            const timeSlots = generateTimeSlots();
+            const availableTimeSlots = getAvailableTimeSlots(appointmentForm.date);
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="bg-blue-600 text-white shadow-lg">
+                        <div className="max-w-7xl mx-auto px-4 py-4">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                                        <Icons.Package />
+                                        Farmacia Alcala Adame
+                                    </h1>
+                                    <StatusIndicator />
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={manualSync}
+                                        disabled={loading}
+                                        className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {loading ? <div className="loading"></div> : <Icons.Sync />}
+                                        Sincronizar
+                                    </button>
+                                    <button
+                                        onClick={backupData}
+                                        className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                                    >
+                                        <Icons.Download />
+                                        Backup
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Navigation */}
+                    <nav className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4">
+                            <div className="flex space-x-8 overflow-x-auto">
+                                {[
+                                    { id: 'dashboard', label: 'Dashboard', icon: <Icons.Grid /> },
+                                    { id: 'inventory', label: 'Inventario', icon: <Icons.Package /> },
+                                    { id: 'sales', label: 'Ventas', icon: <Icons.ShoppingCart /> },
+                                    { id: 'appointments', label: 'Citas', icon: <Icons.Calendar /> },
+                                    { id: 'reports', label: 'Reportes', icon: <Icons.TrendingUp /> }
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium whitespace-nowrap ${
+                                            activeTab === tab.id
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        {tab.icon}
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </nav>
+
+                    <div className="max-w-7xl mx-auto px-4 py-6">
+                        {/* Dashboard */}
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-6">
+                                {medications.length === 0 ? (
+                                    // Mensaje de bienvenida
+                                    <div className="text-center py-12">
+                                        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-auto">
+                                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Icons.Package />
+                                            </div>
+                                            <h3 className="text-xl font-semibold text-gray-900 mb-2">¡Bienvenido a tu Farmacia Alcala Adame!</h3>
+                                            <p className="text-gray-600 mb-6">Comienza agregando tu primer medicamento para empezar a usar el sistema.</p>
+                                            <button
+                                                onClick={() => setShowAddForm(true)}
+                                                disabled={loading}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
+                                            >
+                                                {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                                Agregar Primer Medicamento
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Stats Cards */}
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                                            <div className="bg-white rounded-lg shadow p-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-600">Total Productos</p>
+                                                        <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
+                                                    </div>
+                                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                        <Icons.Package />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white rounded-lg shadow p-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-600">Stock Total</p>
+                                                        <p className="text-2xl font-bold text-gray-900">{totalStock}</p>
+                                                    </div>
+                                                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                                        <Icons.Package />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white rounded-lg shadow p-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-600">Stock Bajo</p>
+                                                        <p className="text-2xl font-bold text-red-600">{lowStockMeds.length}</p>
+                                                    </div>
+                                                    <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                                                        <Icons.AlertTriangle />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white rounded-lg shadow p-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-600">Ventas Hoy</p>
+                                                        <p className="text-2xl font-bold text-green-600">${todayRevenue.toFixed(2)}</p>
+                                                    </div>
+                                                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                                        <Icons.TrendingUp />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white rounded-lg shadow p-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-600">Citas Hoy</p>
+                                                        <p className="text-2xl font-bold text-blue-600">{todayAppointments.length}</p>
+                                                    </div>
+                                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                        <Icons.Calendar />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Alertas, Top ventas y Citas de hoy */}
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                            {/* Alertas de stock bajo */}
+                                            <div className="bg-white rounded-lg shadow">
+                                                <div className="p-6 border-b">
+                                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                                        <Icons.AlertTriangle />
+                                                        Stock Bajo
+                                                    </h3>
+                                                </div>
+                                                <div className="p-6">
+                                                    {lowStockMeds.length === 0 ? (
+                                                        <p className="text-gray-500">No hay productos con stock bajo</p>
+                                                    ) : (
+                                                        <div className="space-y-3">
+                                                            {lowStockMeds.slice(0, 5).map(med => (
+                                                                <div key={med.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                                                                    <div>
+                                                                        <p className="font-medium text-gray-900">{med.name}</p>
+                                                                        <p className="text-sm text-gray-600">{med.presentation}</p>
+                                                                    </div>
+                                                                    <span className="text-red-600 font-bold">{med.quantity} unidades</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Top medicamentos más vendidos */}
+                                            <div className="bg-white rounded-lg shadow">
+                                                <div className="p-6 border-b">
+                                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                                        <Icons.TrendingUp />
+                                                        Más Vendidos
+                                                    </h3>
+                                                </div>
+                                                <div className="p-6">
+                                                    {topSellingMeds.filter(med => med.totalSold > 0).length === 0 ? (
+                                                        <p className="text-gray-500">No hay ventas registradas</p>
+                                                    ) : (
+                                                        <div className="space-y-3">
+                                                            {topSellingMeds.filter(med => med.totalSold > 0).map((med, index) => (
+                                                                <div key={med.id} className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className="bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">
+                                                                            {index + 1}
+                                                                        </span>
+                                                                        <div>
+                                                                            <p className="font-medium text-gray-900">{med.name}</p>
+                                                                            <p className="text-sm text-gray-600">{med.presentation}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="text-green-600 font-bold">{med.totalSold} vendidos</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Citas de hoy */}
+                                            <div className="bg-white rounded-lg shadow">
+                                                <div className="p-6 border-b">
+                                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                                        <Icons.Calendar />
+                                                        Citas de Hoy
+                                                    </h3>
+                                                </div>
+                                                <div className="p-6">
+                                                    {todayAppointments.length === 0 ? (
+                                                        <p className="text-gray-500">No hay citas programadas para hoy</p>
+                                                    ) : (
+                                                        <div className="space-y-3">
+                                                            {todayAppointments.slice(0, 5).map(apt => (
+                                                                <div key={apt.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                                                                    <div>
+                                                                        <p className="font-medium text-gray-900">{apt.patientName}</p>
+                                                                        <p className="text-sm text-gray-600 flex items-center gap-1">
+                                                                            <Icons.Clock />
+                                                                            {apt.time} - {apt.type}
+                                                                        </p>
+                                                                    </div>
+                                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                        apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
+                                                                        apt.status === 'Programada' ? 'bg-blue-100 text-blue-800' :
+                                                                        apt.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
+                                                                        'bg-gray-100 text-gray-800'
+                                                                    }`}>
+                                                                        {apt.status}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Acciones rápidas */}
+                                        <div className="bg-white rounded-lg shadow p-6">
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <button
+                                                    onClick={() => setShowAddForm(true)}
+                                                    disabled={loading}
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                                                >
+                                                    {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                                    Nuevo Medicamento
+                                                </button>
+                                                <button
+                                                    onClick={() => setActiveTab('sales')}
+                                                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    <Icons.ShoppingCart />
+                                                    Nueva Venta
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowAppointmentForm(true)}
+                                                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    <Icons.Calendar />
+                                                    Nueva Cita
+                                                </button>
+                                                <button
+                                                    onClick={() => setActiveTab('inventory')}
+                                                    className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    <Icons.Package />
+                                                    Ver Inventario
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Inventario */}
+                        {activeTab === 'inventory' && (
+                            <div className="space-y-6">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <h2 className="text-2xl font-bold text-gray-900">Inventario</h2>
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <Icons.Search />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar medicamentos..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setViewMode('grid')}
+                                                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                            >
+                                                <Icons.Grid />
+                                            </button>
+                                            <button
+                                                onClick={() => setViewMode('list')}
+                                                className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                            >
+                                                <Icons.List />
+                                            </button>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowAddForm(true)}
+                                            disabled={loading}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+                                        >
+                                            {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                            Agregar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {filteredMedications.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <div className="bg-white rounded-lg shadow p-8">
+                                            <Icons.Package />
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay medicamentos</h3>
+                                            <p className="text-gray-600 mb-4">
+                                                {medications.length === 0 ? 'Agrega tu primer medicamento' : 'No se encontraron resultados para tu búsqueda'}
+                                            </p>
+                                            {medications.length === 0 && (
+                                                <button
+                                                    onClick={() => setShowAddForm(true)}
+                                                    disabled={loading}
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
+                                                >
+                                                    {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                                    Agregar Medicamento
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {filteredMedications.map(med => (
+                                            <div key={med.id} className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow">
+                                                <div className="p-4">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <h3 className="font-semibold text-gray-900 truncate pr-2">{med.name}</h3>
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                                                            med.quantity <= med.minStock 
+                                                                ? 'bg-red-100 text-red-800' 
+                                                                : 'bg-green-100 text-green-800'
+                                                        }`}>
+                                                            {med.quantity} uds
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-2 text-sm text-gray-600">
+                                                        <p><span className="font-medium">Presentación:</span> {med.presentation}</p>
+                                                        <p><span className="font-medium">Sustancia:</span> {med.activeSubstance || 'N/A'}</p>
+                                                        <p><span className="font-medium">Precio:</span> ${med.publicPrice}</p>
+                                                        <p><span className="font-medium">Representante:</span> {med.representative || 'N/A'}</p>
+                                                    </div>
+
+                                                    <div className="flex gap-2 mt-4">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingMed(med);
+                                                                setFormData({
+                                                                    name: med.name,
+                                                                    presentation: med.presentation,
+                                                                    activeSubstance: med.activeSubstance || '',
+                                                                    unitPrice: med.unitPrice.toString(),
+                                                                    publicPrice: med.publicPrice.toString(),
+                                                                    quantity: med.quantity.toString(),
+                                                                    minStock: med.minStock.toString(),
+                                                                    representative: med.representative || '',
+                                                                    phone: med.phone || ''
+                                                                });
+                                                            }}
+                                                            disabled={loading}
+                                                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded text-sm flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                                                        >
+                                                            <Icons.Edit />
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setShowAddStock(med)}
+                                                            disabled={loading}
+                                                            className="flex-1 bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1 rounded text-sm flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                                                        >
+                                                            <Icons.Plus />
+                                                            Stock
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deleteMedication(med.id)}
+                                                            disabled={loading}
+                                                            className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded text-sm flex items-center justify-center transition-colors disabled:opacity-50"
+                                                        >
+                                                            <Icons.Trash />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Ventas */}
+                        {activeTab === 'sales' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Búsqueda y productos */}
+                                <div className="lg:col-span-2 space-y-6">
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Buscar Productos</h3>
+                                        <div className="relative mb-4">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <Icons.Search />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar medicamentos para vender..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                                            {filteredMedications.filter(med => med.quantity > 0).length === 0 ? (
+                                                <p className="text-gray-500 text-center py-8">No hay productos disponibles para venta</p>
+                                            ) : (
+                                                filteredMedications.filter(med => med.quantity > 0).map(med => (
+                                                    <div key={med.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-medium text-gray-900">{med.name}</h4>
+                                                            <p className="text-sm text-gray-600">{med.presentation} - {med.activeSubstance}</p>
+                                                            <div className="flex gap-4 text-sm text-gray-500">
+                                                                <span>Stock: {med.quantity}</span>
+                                                                <span>Precio: ${med.publicPrice}</span>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => addToCart(med)}
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                                                        >
+                                                            <Icons.Plus />
+                                                            Agregar
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Carrito */}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                        <Icons.ShoppingCart />
+                                        Carrito ({cart.length})
+                                    </h3>
+
+                                    {cart.length === 0 ? (
+                                        <p className="text-gray-500 text-center py-8">El carrito está vacío</p>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {cart.map(item => (
+                                                <div key={item.id} className="border border-gray-200 rounded-lg p-3">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-medium text-gray-900 text-sm pr-2">{item.name}</h4>
+                                                        <button
+                                                            onClick={() => updateCartQuantity(item.id, 0)}
+                                                            className="text-red-500 hover:text-red-700 transition-colors"
+                                                        >
+                                                            <Icons.X />
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600 mb-2">{item.presentation}</p>
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                                                                className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-sm transition-colors"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <span className="w-8 text-center text-sm">{item.quantity}</span>
+                                                            <button
+                                                                onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                                                                className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-sm transition-colors"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+                                                        <span className="text-sm font-medium">${(item.publicPrice * item.quantity).toFixed(2)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            <div className="border-t pt-4">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <span className="font-semibold">Total:</span>
+                                                    <span className="font-bold text-lg">
+                                                        ${cart.reduce((sum, item) => sum + (item.publicPrice * item.quantity), 0).toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={processSale}
+                                                    disabled={loading}
+                                                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                                                >
+                                                    {loading ? <div className="loading"></div> : <Icons.Check />}
+                                                    Procesar Venta
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Citas/Calendario */}
+                        {activeTab === 'appointments' && (
+                            <div className="space-y-6">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <h2 className="text-2xl font-bold text-gray-900">Calendario de Citas</h2>
+                                    <button
+                                        onClick={() => setShowAppointmentForm(true)}
+                                        disabled={loading}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                        Nueva Cita
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                                    {/* Calendario */}
+                                    <div className="lg:col-span-3 bg-white rounded-lg shadow">
+                                        <div className="p-6 border-b">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="text-lg font-semibold">
+                                                    {currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                                                </h3>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                                                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    >
+                                                        <Icons.ChevronLeft />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setCurrentMonth(new Date())}
+                                                        className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg text-sm hover:bg-blue-200 transition-colors"
+                                                    >
+                                                        Hoy
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+                                                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    >
+                                                        <Icons.ChevronRight />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Días de la semana */}
+                                            <div className="grid grid-cols-7 gap-px mb-2">
+                                                {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+                                                    <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+                                                        {day}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Días del mes */}
+                                            <div className="grid grid-cols-7 gap-px">
+                                                {getDaysInMonth(currentMonth).map((day, index) => {
+                                                    const dayAppointments = getAppointmentsForDate(day.date);
+                                                    const isCurrentMonth = day.isCurrentMonth;
+                                                    const isTodayDate = isToday(day.date);
+
+                                                    return (
+                                                        <div
+                                                            key={index}
+                                                            className={`calendar-day p-2 cursor-pointer ${
+                                                                isTodayDate ? 'today' : ''
+                                                            } ${
+                                                                !isCurrentMonth ? 'other-month' : ''
+                                                            }`}
+                                                            onClick={() => handleDayClick(day.date)}
+                                                        >
+                                                            <div className="text-sm font-medium mb-1">
+                                                                {day.date.getDate()}
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {dayAppointments.slice(0, 3).map(apt => (
+                                                                    <div
+                                                                        key={apt.id}
+                                                                        className={`appointment-item ${
+                                                                            apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
+                                                                            apt.status === 'Programada' ? 'bg-blue-100 text-blue-800' :
+                                                                            apt.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
+                                                                            apt.status === 'Completada' ? 'bg-gray-100 text-gray-800' :
+                                                                            'bg-red-100 text-red-800'
+                                                                        }`}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditingAppointment(apt);
+                                                                            setAppointmentForm({
+                                                                                patientName: apt.patientName,
+                                                                                phone: apt.phone || '',
+                                                                                email: apt.email || '',
+                                                                                date: apt.date,
+                                                                                time: apt.time,
+                                                                                type: apt.type,
+                                                                                notes: apt.notes || '',
+                                                                                status: apt.status
+                                                                            });
+                                                                        }}
+                                                                    >
+                                                                        {apt.time} {apt.patientName}
+                                                                    </div>
+                                                                ))}
+                                                                {dayAppointments.length > 3 && (
+                                                                    <div className="text-xs text-gray-500">
+                                                                        +{dayAppointments.length - 3} más
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Lista de citas del día */}
+                                    <div className="bg-white rounded-lg shadow">
+                                        <div className="p-6 border-b">
+                                            <h3 className="text-lg font-semibold">Citas de Hoy</h3>
+                                        </div>
+                                        <div className="p-6">
+                                            {todayAppointments.length === 0 ? (
+                                                <p className="text-gray-500">No hay citas programadas para hoy</p>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {todayAppointments.map(apt => (
+                                                        <div key={apt.id} className="border border-gray-200 rounded-lg p-3">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className="flex-1">
+                                                                    <h4 className="font-medium text-gray-900">{apt.patientName}</h4>
+                                                                    <p className="text-sm text-gray-600 flex items-center gap-1">
+                                                                        <Icons.Clock />
+                                                                        {apt.time}
+                                                                    </p>
+                                                                    <p className="text-sm text-gray-600">{apt.type}</p>
+                                                                </div>
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                    apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
+                                                                    apt.status === 'Programada' ? 'bg-blue-100 text-blue-800' :
+                                                                    apt.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    apt.status === 'Completada' ? 'bg-gray-100 text-gray-800' :
+                                                                    'bg-red-100 text-red-800'
+                                                                }`}>
+                                                                    {apt.status}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingAppointment(apt);
+                                                                        setAppointmentForm({
+                                                                            patientName: apt.patientName,
+                                                                            phone: apt.phone || '',
+                                                                            email: apt.email || '',
+                                                                            date: apt.date,
+                                                                            time: apt.time,
+                                                                            type: apt.type,
+                                                                            notes: apt.notes || '',
+                                                                            status: apt.status
+                                                                        });
+                                                                    }}
+                                                                    className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs flex items-center justify-center gap-1 transition-colors"
+                                                                >
+                                                                    <Icons.Edit />
+                                                                    Editar
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => deleteAppointment(apt.id)}
+                                                                    className="bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded text-xs flex items-center justify-center transition-colors"
+                                                                >
+                                                                    <Icons.Trash />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Reportes */}
+                        {activeTab === 'reports' && (
+                            <div className="space-y-6">
+                                <h2 className="text-2xl font-bold text-gray-900">Reportes</h2>
+                                
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {/* Medicamentos más vendidos */}
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Medicamentos Más Vendidos</h3>
+                                        <div className="space-y-3">
+                                            {topSellingMeds.filter(med => med.totalSold > 0).length === 0 ? (
+                                                <p className="text-gray-500 text-center py-8">No hay ventas registradas</p>
+                                            ) : (
+                                                topSellingMeds.filter(med => med.totalSold > 0).map((med, index) => (
+                                                    <div key={med.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">
+                                                                {index + 1}
+                                                            </span>
+                                                            <div>
+                                                                <p className="font-medium text-gray-900">{med.name}</p>
+                                                                <p className="text-sm text-gray-600">{med.presentation}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="font-bold text-blue-600">{med.totalSold}</p>
+                                                            <p className="text-sm text-gray-500">vendidos</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Historial de ventas */}
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Historial de Ventas</h3>
+                                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                                            {salesHistory.length === 0 ? (
+                                                <p className="text-gray-500 text-center py-8">No hay ventas registradas</p>
+                                            ) : (
+                                                salesHistory.slice().reverse().map(sale => (
+                                                    <div key={sale.id} className="border border-gray-200 rounded-lg p-3">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <span className="text-sm text-gray-600">
+                                                                {new Date(sale.date).toLocaleString()}
+                                                            </span>
+                                                            <span className="font-bold text-green-600">${sale.total.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">
+                                                            {sale.items && sale.items.map(item => (
+                                                                <div key={item.id}>
+                                                                    {item.name} x{item.quantity}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Citas por tipo */}
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Citas por Tipo</h3>
+                                        <div className="space-y-3">
+                                            {appointmentTypes.map(type => {
+                                                const count = appointments.filter(apt => apt.type === type).length;
+                                                if (count === 0) return null;
+                                                
+                                                return (
+                                                    <div key={type} className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                                                        <span className="font-medium text-gray-900">{type}</span>
+                                                        <span className="font-bold text-purple-600">{count}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {appointments.length === 0 && (
+                                                <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Citas por estado */}
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Citas por Estado</h3>
+                                        <div className="space-y-3">
+                                            {appointmentStatuses.map(status => {
+                                                const count = appointments.filter(apt => apt.status === status).length;
+                                                if (count === 0) return null;
+                                                
+                                                return (
+                                                    <div key={status} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                                        <span className="font-medium text-gray-900">{status}</span>
+                                                        <span className={`font-bold ${
+                                                            status === 'Confirmada' ? 'text-green-600' :
+                                                            status === 'Programada' ? 'text-blue-600' :
+                                                            status === 'En progreso' ? 'text-yellow-600' :
+                                                            status === 'Completada' ? 'text-gray-600' :
+                                                            'text-red-600'
+                                                        }`}>
+                                                            {count}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {appointments.length === 0 && (
+                                                <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modal Agregar/Editar Medicamento */}
+                    {(showAddForm || editingMed) && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto fade-in">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">
+                                            {editingMed ? 'Editar Medicamento' : 'Nuevo Medicamento'}
+                                        </h3>
+                                        <button
+                                            onClick={() => {
+                                                setShowAddForm(false);
+                                                setEditingMed(null);
+                                                resetForm();
+                                            }}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <Icons.X />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Nombre del medicamento *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                placeholder="Ejemplo: Paracetamol"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Presentación *
+                                            </label>
+                                            <select
+                                                value={formData.presentation}
+                                                onChange={(e) => setFormData({...formData, presentation: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={loading}
+                                            >
+                                                {presentations.map(presentation => (
+                                                    <option key={presentation} value={presentation}>{presentation}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Sustancia activa
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={formData.activeSubstance}
+                                                onChange={(e) => setFormData({...formData, activeSubstance: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                placeholder="Ejemplo: Acetaminofén"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Precio unitario *
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={formData.unitPrice}
+                                                    onChange={(e) => setFormData({...formData, unitPrice: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="0.00"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Precio al público *
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={formData.publicPrice}
+                                                    onChange={(e) => setFormData({...formData, publicPrice: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="0.00"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Cantidad *
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={formData.quantity}
+                                                    onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="0"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Stock mínimo
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={formData.minStock}
+                                                    onChange={(e) => setFormData({...formData, minStock: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="5"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Representante
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={formData.representative}
+                                                onChange={(e) => setFormData({...formData, representative: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                placeholder="Nombre del representante"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Teléfono
+                                            </label>
+                                            <input
+                                                type="tel"
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                placeholder="123-456-7890"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="flex gap-4 pt-4">
+                                            <button
+                                                onClick={() => {
+                                                    setShowAddForm(false);
+                                                    setEditingMed(null);
+                                                    resetForm();
+                                                }}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={editingMed ? updateMedication : addMedication}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? <div className="loading"></div> : null}
+                                                {editingMed ? 'Actualizar' : 'Guardar'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Agregar Stock */}
+                    {showAddStock && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-md fade-in">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">Agregar Stock</h3>
+                                        <button
+                                            onClick={() => {
+                                                setShowAddStock(null);
+                                                setAddStockData({ quantity: '', date: new Date().toISOString().split('T')[0] });
+                                            }}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <Icons.X />
+                                        </button>
+                                    </div>
+
+                                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                                        <h4 className="font-medium text-gray-900">{showAddStock.name}</h4>
+                                        <p className="text-sm text-gray-600">{showAddStock.presentation}</p>
+                                        <p className="text-sm text-gray-600">Stock actual: {showAddStock.quantity} unidades</p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Cantidad a agregar *
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={addStockData.quantity}
+                                                onChange={(e) => setAddStockData({...addStockData, quantity: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                min="1"
+                                                placeholder="Cantidad"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Fecha de entrada
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={addStockData.date}
+                                                onChange={(e) => setAddStockData({...addStockData, date: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="flex gap-4 pt-4">
+                                            <button
+                                                onClick={() => {
+                                                    setShowAddStock(null);
+                                                    setAddStockData({ quantity: '', date: new Date().toISOString().split('T')[0] });
+                                                }}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={addStock}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? <div className="loading"></div> : null}
+                                                Agregar Stock
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Agregar/Editar Cita */}
+                    {(showAppointmentForm || editingAppointment) && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto fade-in">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">
+                                            {editingAppointment ? 'Editar Cita' : 'Nueva Cita'}
+                                        </h3>
+                                        <button
+                                            onClick={() => {
+                                                setShowAppointmentForm(false);
+                                                setEditingAppointment(null);
+                                                resetAppointmentForm();
+                                            }}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <Icons.X />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Nombre del paciente *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={appointmentForm.patientName}
+                                                onChange={(e) => setAppointmentForm({...appointmentForm, patientName: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                placeholder="Nombre completo"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Teléfono
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    value={appointmentForm.phone}
+                                                    onChange={(e) => setAppointmentForm({...appointmentForm, phone: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="123-456-7890"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Email
+                                                </label>
+                                                <input
+                                                    type="email"
+                                                    value={appointmentForm.email}
+                                                    onChange={(e) => setAppointmentForm({...appointmentForm, email: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="email@ejemplo.com"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Fecha *
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={appointmentForm.date}
+                                                    onChange={(e) => setAppointmentForm({...appointmentForm, date: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Hora *
+                                                </label>
+                                                <select
+                                                    value={appointmentForm.time}
+                                                    onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    disabled={loading}
+                                                >
+                                                    <option value="">Seleccionar hora</option>
+                                                    {availableTimeSlots.map(time => (
+                                                        <option key={time} value={time}>{time}</option>
+                                                    ))}
+                                                    {editingAppointment && appointmentForm.time && !availableTimeSlots.includes(appointmentForm.time) && (
+                                                        <option value={appointmentForm.time}>{appointmentForm.time} (hora actual)</option>
+                                                    )}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Tipo de cita
+                                            </label>
+                                            <select
+                                                value={appointmentForm.type}
+                                                onChange={(e) => setAppointmentForm({...appointmentForm, type: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={loading}
+                                            >
+                                                {appointmentTypes.map(type => (
+                                                    <option key={type} value={type}>{type}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Estado
+                                            </label>
+                                            <select
+                                                value={appointmentForm.status}
+                                                onChange={(e) => setAppointmentForm({...appointmentForm, status: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={loading}
+                                            >
+                                                {appointmentStatuses.map(status => (
+                                                    <option key={status} value={status}>{status}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Notas
+                                            </label>
+                                            <textarea
+                                                value={appointmentForm.notes}
+                                                onChange={(e) => setAppointmentForm({...appointmentForm, notes: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                rows="3"
+                                                placeholder="Notas adicionales..."
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="flex gap-4 pt-4">
+                                            <button
+                                                onClick={() => {
+                                                    setShowAppointmentForm(false);
+                                                    setEditingAppointment(null);
+                                                    resetAppointmentForm();
+                                                }}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={editingAppointment ? updateAppointment : addAppointment}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? <div className="loading"></div> : null}
+                                                {editingAppointment ? 'Actualizar' : 'Guardar'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Vista de Citas del Día */}
+                    {showDayAppointments && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto fade-in">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">
+                                            Citas del {selectedDayDate?.toLocaleDateString('es-ES', { 
+                                                weekday: 'long', 
+                                                year: 'numeric', 
+                                                month: 'long', 
+                                                day: 'numeric' 
+                                            })}
+                                        </h3>
+                                        <button
+                                            onClick={() => {
+                                                setShowDayAppointments(false);
+                                                setSelectedDayAppointments([]);
+                                                setSelectedDayDate(null);
+                                            }}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <Icons.X />
+                                        </button>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <button
+                                            onClick={() => {
+                                                setAppointmentForm({
+                                                    ...appointmentForm,
+                                                    date: selectedDayDate.toISOString().split('T')[0]
+                                                });
+                                                setShowDayAppointments(false);
+                                                setShowAppointmentForm(true);
+                                            }}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                                        >
+                                            <Icons.Plus />
+                                            Agregar Cita para este Día
+                                        </button>
+                                    </div>
+
+                                    {selectedDayAppointments.length === 0 ? (
+                                        <div className="text-center py-8">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Icons.Calendar />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay citas programadas</h3>
+                                            <p className="text-gray-600 mb-4">No tienes citas programadas para este día.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {selectedDayAppointments
+                                                .sort((a, b) => a.time.localeCompare(b.time))
+                                                .map(apt => (
+                                                <div key={apt.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-gray-900 text-lg">{apt.patientName}</h4>
+                                                            <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                                                                <span className="flex items-center gap-1">
+                                                                    <Icons.Clock />
+                                                                    {apt.time}
+                                                                </span>
+                                                                {apt.phone && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        📞 {apt.phone}
+                                                                    </span>
+                                                                )}
+                                                                {apt.email && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        📧 {apt.email}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                                            apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
+                                                            apt.status === 'Programada' ? 'bg-blue-100 text-blue-800' :
+                                                            apt.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
+                                                            apt.status === 'Completada' ? 'bg-gray-100 text-gray-800' :
+                                                            'bg-red-100 text-red-800'
+                                                        }`}>
+                                                            {apt.status}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="mb-3">
+                                                        <span className="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-sm font-medium">
+                                                            {apt.type}
+                                                        </span>
+                                                    </div>
+
+                                                    {apt.notes && (
+                                                        <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                                                            <p className="text-sm text-gray-700">{apt.notes}</p>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingAppointment(apt);
+                                                                setAppointmentForm({
+                                                                    patientName: apt.patientName,
+                                                                    phone: apt.phone || '',
+                                                                    email: apt.email || '',
+                                                                    date: apt.date,
+                                                                    time: apt.time,
+                                                                    type: apt.type,
+                                                                    notes: apt.notes || '',
+                                                                    status: apt.status
+                                                                });
+                                                                setShowDayAppointments(false);
+                                                            }}
+                                                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
+                                                        >
+                                                            <Icons.Edit />
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('¿Está seguro de eliminar esta cita?')) {
+                                                                    deleteAppointment(apt.id);
+                                                                    setSelectedDayAppointments(prev => prev.filter(a => a.id !== apt.id));
+                                                                }
+                                                            }}
+                                                            className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
+                                                        >
+                                                            <Icons.Trash />
+                                                            Eliminar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(React.createElement(PharmacyPOS), document.getElementById('root'));
+    </script>
+</body>
+</html>
