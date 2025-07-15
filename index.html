@@ -72,6 +72,19 @@
             margin: 1px 0;
             cursor: pointer;
         }
+        .debug-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 300px;
+        }
     </style>
 </head>
 <body>
@@ -184,6 +197,11 @@
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
+            ),
+            Bug: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m7-7H5" />
+                </svg>
             )
         };
 
@@ -191,6 +209,8 @@
         const API = {
             async call(action, data = {}) {
                 try {
+                    console.log(`🔗 API Call: ${action}`, data);
+                    
                     const formData = new FormData();
                     formData.append('action', action);
                     
@@ -212,6 +232,7 @@
                     }
 
                     const result = await response.json();
+                    console.log(`✅ API Response: ${action}`, result);
                     
                     if (!result.success) {
                         throw new Error(result.error || 'Error desconocido');
@@ -219,7 +240,7 @@
 
                     return result;
                 } catch (error) {
-                    console.error('API Error:', error);
+                    console.error(`❌ API Error: ${action}`, error);
                     throw error;
                 }
             },
@@ -257,21 +278,29 @@
 
             // Nuevas funciones para citas
             async getAppointments() {
-                return await this.call('getAppointments');
+                const result = await this.call('getAppointments');
+                console.log('📅 Appointments loaded from API:', result);
+                return result;
             },
 
             async addAppointment(appointment) {
-                return await this.call('addAppointment', appointment);
+                console.log('📅 Adding appointment:', appointment);
+                const result = await this.call('addAppointment', appointment);
+                console.log('📅 Add appointment result:', result);
+                return result;
             },
 
             async updateAppointment(appointment) {
-                return await this.call('updateAppointment', appointment);
+                console.log('📅 Updating appointment:', appointment);
+                const result = await this.call('updateAppointment', appointment);
+                console.log('📅 Update appointment result:', result);
+                return result;
             },
 
             async deleteAppointment(id) {
-                console.log('API: Deleting appointment with ID:', id);
+                console.log('📅 Deleting appointment with ID:', id);
                 const result = await this.call('deleteAppointment', id);
-                console.log('API: Delete appointment result:', result);
+                console.log('📅 Delete appointment result:', result);
                 return result;
             }
         };
@@ -300,6 +329,7 @@
             const [loading, setLoading] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState('checking');
             const [lastSync, setLastSync] = useState(null);
+            const [debugMode, setDebugMode] = useState(false);
 
             // Estados del formulario
             const [formData, setFormData] = useState({
@@ -359,6 +389,21 @@
                 'Programada', 'Confirmada', 'En progreso', 'Completada', 'Cancelada', 'No asistió'
             ];
 
+            // Debug info
+            const debugInfo = useMemo(() => ({
+                appointments: appointments.length,
+                activeClinicId,
+                activeDoctorId,
+                activeTab,
+                currentMonth: currentMonth.toLocaleDateString(),
+                appointmentsForActiveClinic: appointments.filter(apt => apt.clinicId === activeClinicId).length,
+                appointmentsForActiveDoctor: appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId).length,
+                todayAppointments: appointments.filter(apt => {
+                    const today = new Date().toISOString().split('T')[0];
+                    return apt.date === today && apt.clinicId === activeClinicId;
+                }).length
+            }), [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
+
             // Verificar conexión y cargar datos
             useEffect(() => {
                 loadInitialData();
@@ -369,9 +414,11 @@
                     setLoading(true);
                     setConnectionStatus('checking');
                     
+                    console.log('🔄 Loading initial data...');
+                    
                     // Test connection first
                     const testResult = await API.test();
-                    console.log('Connection test:', testResult);
+                    console.log('🔗 Connection test:', testResult);
                     
                     // Load data
                     const [medsResult, salesResult, appointmentsResult] = await Promise.all([
@@ -380,14 +427,32 @@
                         API.getAppointments()
                     ]);
 
+                    console.log('📊 Data loaded:', {
+                        medications: medsResult.data?.length || 0,
+                        sales: salesResult.data?.length || 0,
+                        appointments: appointmentsResult.data?.length || 0
+                    });
+
                     setMedications(medsResult.data || []);
                     setSalesHistory(salesResult.data || []);
-                    setAppointments(appointmentsResult.data || []);
+                    
+                    // Ensure appointments have proper structure
+                    const processedAppointments = (appointmentsResult.data || []).map(apt => ({
+                        ...apt,
+                        // Ensure IDs are numbers
+                        id: typeof apt.id === 'string' ? parseInt(apt.id) || apt.id : apt.id,
+                        doctorId: typeof apt.doctorId === 'string' ? parseInt(apt.doctorId) || 1 : apt.doctorId || 1,
+                        clinicId: typeof apt.clinicId === 'string' ? parseInt(apt.clinicId) || 1 : apt.clinicId || 1
+                    }));
+                    
+                    console.log('📅 Processed appointments:', processedAppointments);
+                    setAppointments(processedAppointments);
+                    
                     setConnectionStatus('online');
                     setLastSync(new Date());
 
                 } catch (error) {
-                    console.error('Error loading data:', error);
+                    console.error('❌ Error loading data:', error);
                     setConnectionStatus('error');
                     
                     // Fallback a localStorage
@@ -397,7 +462,11 @@
                     
                     if (savedMeds) setMedications(JSON.parse(savedMeds));
                     if (savedSales) setSalesHistory(JSON.parse(savedSales));
-                    if (savedAppointments) setAppointments(JSON.parse(savedAppointments));
+                    if (savedAppointments) {
+                        const localAppointments = JSON.parse(savedAppointments);
+                        console.log('📅 Loaded appointments from localStorage:', localAppointments);
+                        setAppointments(localAppointments);
+                    }
                 } finally {
                     setLoading(false);
                 }
@@ -415,6 +484,16 @@
             useEffect(() => {
                 localStorage.setItem('pharmacy_appointments', JSON.stringify(appointments));
             }, [appointments]);
+
+            // Debug log cuando cambian los appointments
+            useEffect(() => {
+                console.log('📅 Appointments state changed:', {
+                    total: appointments.length,
+                    sample: appointments.slice(0, 3),
+                    activeClinicId,
+                    activeDoctorId
+                });
+            }, [appointments, activeClinicId, activeDoctorId]);
 
             // Limpiar la hora seleccionada cuando cambie la fecha o el médico para mostrar horarios disponibles
             useEffect(() => {
@@ -519,12 +598,15 @@
 
             const getAppointmentsForDate = (date, doctorId = null, clinicId = null) => {
                 const dateStr = date.toISOString().split('T')[0];
-                return appointments.filter(apt => {
+                const filtered = appointments.filter(apt => {
                     const matchesDate = apt.date === dateStr;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
                     const matchesClinic = clinicId ? apt.clinicId === clinicId : apt.clinicId === activeClinicId;
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
+                
+                console.log(`📅 getAppointmentsForDate(${dateStr}, doctor:${doctorId}, clinic:${clinicId}):`, filtered.length);
+                return filtered;
             };
 
             const getAvailableTimeSlots = (selectedDate, doctorId, clinicId = null) => {
@@ -556,12 +638,15 @@
 
             const getTodayAppointments = (doctorId = null, clinicId = null) => {
                 const today = new Date().toISOString().split('T')[0];
-                return appointments.filter(apt => {
+                const filtered = appointments.filter(apt => {
                     const matchesDate = apt.date === today;
                     const matchesDoctor = doctorId ? apt.doctorId === doctorId : true;
                     const matchesClinic = clinicId ? apt.clinicId === clinicId : apt.clinicId === activeClinicId;
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
+                
+                console.log(`📅 getTodayAppointments(doctor:${doctorId}, clinic:${clinicId}):`, filtered.length);
+                return filtered;
             };
 
             const isToday = (date) => {
@@ -590,6 +675,7 @@
                         minStock: parseInt(formData.minStock) || 5,
                         representative: formData.representative,
                         phone: formData.phone,
+                        clinicId: activeClinicId,
                         dateAdded: new Date().toISOString()
                     };
 
@@ -729,13 +815,13 @@
                     apt.date === appointmentForm.date && 
                     apt.time === appointmentForm.time &&
                     apt.doctorId === appointmentForm.doctorId &&
-                    apt.clinicId === activeClinicId &&
+                    apt.clinicId === appointmentForm.clinicId &&
                     (!editingAppointment || apt.id !== editingAppointment.id)
                 );
 
                 if (existingAppointment) {
                     const doctor = doctors.find(d => d.id === appointmentForm.doctorId);
-                    const clinic = clinics.find(c => c.id === activeClinicId);
+                    const clinic = clinics.find(c => c.id === appointmentForm.clinicId);
                     alert(`${doctor.name} ya tiene una cita programada para las ${appointmentForm.time} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
                     return;
                 }
@@ -754,16 +840,23 @@
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
                         doctorId: appointmentForm.doctorId,
-                        clinicId: activeClinicId,
+                        clinicId: appointmentForm.clinicId,
                         createdAt: new Date().toISOString()
                     };
+
+                    console.log('📅 Adding new appointment:', newAppointment);
 
                     if (connectionStatus === 'online') {
                         await API.addAppointment(newAppointment);
                         setLastSync(new Date());
                     }
 
-                    setAppointments(prev => [...prev, newAppointment]);
+                    setAppointments(prev => {
+                        const updated = [...prev, newAppointment];
+                        console.log('📅 Appointments updated, total:', updated.length);
+                        return updated;
+                    });
+                    
                     resetAppointmentForm();
                     setShowAppointmentForm(false);
                     alert('Cita agregada exitosamente');
@@ -816,6 +909,8 @@
                         clinicId: appointmentForm.clinicId
                     };
 
+                    console.log('📅 Updating appointment:', updatedAppointment);
+
                     if (connectionStatus === 'online') {
                         await API.updateAppointment(updatedAppointment);
                         setLastSync(new Date());
@@ -824,6 +919,7 @@
                     setAppointments(prev => prev.map(apt => 
                         apt.id === editingAppointment.id ? updatedAppointment : apt
                     ));
+                    
                     resetAppointmentForm();
                     setEditingAppointment(null);
                     alert('Cita actualizada exitosamente');
@@ -848,7 +944,12 @@
                         setLastSync(new Date());
                     }
 
-                    setAppointments(prev => prev.filter(apt => apt.id !== id));
+                    setAppointments(prev => {
+                        const updated = prev.filter(apt => apt.id !== id);
+                        console.log('📅 Appointment deleted, remaining:', updated.length);
+                        return updated;
+                    });
+                    
                     alert('Cita eliminada exitosamente');
 
                 } catch (error) {
@@ -932,7 +1033,8 @@
                             total: item.publicPrice * item.quantity
                         })),
                         total: cart.reduce((sum, item) => sum + (item.publicPrice * item.quantity), 0),
-                        date: new Date().toISOString()
+                        date: new Date().toISOString(),
+                        clinicId: activeClinicId
                     };
 
                     // Actualizar stock
@@ -970,6 +1072,37 @@
                     alert('Error al sincronizar con Google Sheets, pero la venta se guardó localmente');
                 } finally {
                     setLoading(false);
+                }
+            };
+
+            // Test functions
+            const testAddAppointment = async () => {
+                const testAppointment = {
+                    id: Date.now(),
+                    patientName: 'Paciente Test',
+                    phone: '123-456-7890',
+                    email: 'test@test.com',
+                    date: new Date().toISOString().split('T')[0],
+                    time: '09:00',
+                    type: 'Consulta',
+                    notes: 'Cita de prueba',
+                    status: 'Programada',
+                    doctorId: 1,
+                    clinicId: 1,
+                    createdAt: new Date().toISOString()
+                };
+
+                console.log('🧪 Testing add appointment:', testAppointment);
+
+                try {
+                    if (connectionStatus === 'online') {
+                        await API.addAppointment(testAppointment);
+                    }
+                    setAppointments(prev => [...prev, testAppointment]);
+                    alert('Cita de prueba agregada');
+                } catch (error) {
+                    console.error('Error in test:', error);
+                    alert('Error en prueba');
                 }
             };
 
@@ -1049,235 +1182,30 @@
             };
 
             // Calculados del dashboard
-            const totalProducts = medications.length;
-            const totalStock = medications.reduce((sum, med) => sum + med.quantity, 0);
+            const totalProducts = medications.filter(med => med.clinicId === activeClinicId).length;
+            const totalStock = medications.filter(med => med.clinicId === activeClinicId).reduce((sum, med) => sum + med.quantity, 0);
             const todaySales = salesHistory.filter(sale => {
                 const saleDate = new Date(sale.date);
                 const today = new Date();
-                return saleDate.toDateString() === today.toDateString();
+                return saleDate.toDateString() === today.toDateString() && sale.clinicId === activeClinicId;
             });
             const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
             const todayAppointments = getTodayAppointments();
 
-            // Agregar DESPUÉS de la línea: const todayAppointments = getTodayAppointments();
-
-// Definir allTodayAppointments que está faltando
-const allTodayAppointments = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return appointments.filter(apt => 
-        apt.date === today && apt.clinicId === activeClinicId
-    );
-}, [appointments, activeClinicId]);
-
-// Exponer variables para debug
-useEffect(() => {
-    // Hacer variables accesibles globalmente
-    window.appointments = appointments;
-    window.activeClinicId = activeClinicId;
-    window.activeDoctorId = activeDoctorId;
-    window.activeTab = activeTab;
-    window.setActiveTab = setActiveTab;
-    window.medications = medications;
-    window.salesHistory = salesHistory;
-    window.todayAppointments = todayAppointments;
-    window.allTodayAppointments = allTodayAppointments;
-    window.getDaysInMonth = getDaysInMonth;
-    window.getAppointmentsForDate = getAppointmentsForDate;
-    window.getTodayAppointments = getTodayAppointments;
-    window.currentMonth = currentMonth;
-    
-    console.log('🔗 Variables debug actualizadas:', {
-        appointments: appointments.length,
-        activeClinicId,
-        activeDoctorId,
-        activeTab,
-        todayAppointments: todayAppointments.length,
-        allTodayAppointments: allTodayAppointments.length
-    });
-}, [appointments, activeClinicId, activeDoctorId, activeTab, medications, salesHistory, todayAppointments, allTodayAppointments, currentMonth]);
-
-// Funciones de debug específicas
-useEffect(() => {
-    window.debugAppointmentState = () => {
-        console.log('🔍 APPOINTMENT STATE DEBUG:');
-        console.log('- appointments:', appointments);
-        console.log('- appointments.length:', appointments.length);
-        console.log('- activeClinicId:', activeClinicId);
-        console.log('- activeDoctorId:', activeDoctorId);
-        console.log('- activeTab:', activeTab);
-        console.log('- todayAppointments:', todayAppointments.length);
-        console.log('- allTodayAppointments:', allTodayAppointments.length);
-        
-        // Appointments para clínica activa
-        const clinicAppointments = appointments.filter(apt => apt.clinicId === activeClinicId);
-        console.log('- Appointments para clínica activa:', clinicAppointments.length);
-        
-        // Appointments para médico activo
-        const doctorAppointments = appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId);
-        console.log('- Appointments para médico activo:', doctorAppointments.length);
-        
-        // Appointments por médico
-        console.log('- Appointments por médico:');
-        [1, 2, 3].forEach(doctorId => {
-            const count = appointments.filter(apt => apt.doctorId === doctorId && apt.clinicId === activeClinicId).length;
-            console.log(`  Doctor ${doctorId}: ${count} appointments`);
-        });
-        
-        // Appointments por clínica
-        console.log('- Appointments por clínica:');
-        [1, 2].forEach(clinicId => {
-            const count = appointments.filter(apt => apt.clinicId === clinicId).length;
-            console.log(`  Clínica ${clinicId}: ${count} appointments`);
-        });
-        
-        if (appointments.length > 0) {
-            console.log('📋 Todos los appointments:');
-            appointments.forEach((apt, index) => {
-                console.log(`${index + 1}. ${apt.patientName} - ${apt.date} ${apt.time} - Dr:${apt.doctorId} - Clínica:${apt.clinicId}`);
-            });
-        }
-        
-        return {
-            total: appointments.length,
-            forClinic: clinicAppointments.length,
-            forDoctor: doctorAppointments.length,
-            today: todayAppointments.length
-        };
-    };
-    
-    window.debugCalendarRendering = () => {
-        console.log('🗓️ CALENDAR RENDERING DEBUG:');
-        console.log('- currentMonth:', currentMonth);
-        console.log('- activeDoctorId:', activeDoctorId);
-        console.log('- activeClinicId:', activeClinicId);
-        
-        const days = getDaysInMonth(currentMonth);
-        console.log('- días del mes:', days.length);
-        
-        let totalAppointmentsInCalendar = 0;
-        let daysWithAppointments = 0;
-        
-        days.forEach(day => {
-            if (day.isCurrentMonth) {
-                const dayAppointments = getAppointmentsForDate(day.date, activeDoctorId, activeClinicId);
-                if (dayAppointments.length > 0) {
-                    console.log(`📅 ${day.date.toDateString()}: ${dayAppointments.length} appointments`);
-                    totalAppointmentsInCalendar += dayAppointments.length;
-                    daysWithAppointments++;
+            // Generar horas disponibles
+            const generateTimeSlots = () => {
+                const slots = [];
+                for (let hour = 8; hour <= 17; hour++) {
+                    for (let minute = 0; minute < 60; minute += 30) {
+                        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                        slots.push(timeString);
+                    }
                 }
-            }
-        });
-        
-        console.log(`📊 Resumen calendario: ${totalAppointmentsInCalendar} appointments en ${daysWithAppointments} días`);
-        
-        return {
-            totalDays: days.length,
-            daysWithAppointments,
-            totalAppointments: totalAppointmentsInCalendar
-        };
-    };
-    
-    window.switchToAppointmentsTab = () => {
-        console.log('🔄 Cambiando a appointments tab...');
-        setActiveTab('appointments');
-        
-        setTimeout(() => {
-            console.log('📅 En appointments tab');
-            window.debugAppointmentState();
-            window.debugCalendarRendering();
-        }, 500);
-    };
-    
-    window.testDifferentDoctors = () => {
-        console.log('👨‍⚕️ TESTING DIFFERENT DOCTORS:');
-        
-        [1, 2, 3].forEach(doctorId => {
-            const doctorAppointments = appointments.filter(apt => 
-                apt.doctorId === doctorId && apt.clinicId === activeClinicId
-            );
-            console.log(`- Doctor ${doctorId}: ${doctorAppointments.length} appointments`);
-            
-            if (doctorAppointments.length > 0) {
-                console.log(`  Primeros appointments:`, doctorAppointments.slice(0, 2));
-            }
-        });
-    };
-    
-    window.forceAppointmentReload = async () => {
-        console.log('🔄 Forzando recarga de appointments...');
-        
-        try {
-            const result = await API.getAppointments();
-            console.log('📅 Appointments recargados:', result);
-            
-            if (result.success) {
-                setAppointments(result.data || []);
-                console.log('✅ Appointments actualizados en React');
-                return result.data || [];
-            }
-        } catch (error) {
-            console.error('❌ Error:', error);
-        }
-    };
-    
-    console.log('🔗 Funciones de debug creadas');
-}, [appointments, activeClinicId, activeDoctorId, activeTab, todayAppointments, allTodayAppointments, currentMonth]);
+                return slots;
+            };
 
-// Debug automático cuando cambian los appointments
-useEffect(() => {
-    console.log('🔄 Appointments cambiaron:', appointments.length);
-    
-    if (appointments.length > 0) {
-        console.log('📅 Primer appointment:', appointments[0]);
-        
-        // Verificar estructura
-        const firstApt = appointments[0];
-        console.log('📋 Estructura del appointment:', {
-            id: firstApt.id,
-            patientName: firstApt.patientName,
-            date: firstApt.date,
-            time: firstApt.time,
-            doctorId: firstApt.doctorId,
-            clinicId: firstApt.clinicId,
-            status: firstApt.status
-        });
-        
-        // Verificar tipos de datos
-        console.log('🔍 Tipos de datos:', {
-            'doctorId type': typeof firstApt.doctorId,
-            'clinicId type': typeof firstApt.clinicId,
-            'activeDoctorId type': typeof activeDoctorId,
-            'activeClinicId type': typeof activeClinicId
-        });
-    }
-}, [appointments, activeDoctorId, activeClinicId]);
-
-// Debug automático cuando cambia el tab
-useEffect(() => {
-    console.log('🔄 Tab cambió a:', activeTab);
-    
-    if (activeTab === 'appointments') {
-        console.log('📅 Entrando a appointments tab');
-        console.log('- Total appointments:', appointments.length);
-        console.log('- Clínica activa:', activeClinicId);
-        console.log('- Médico activo:', activeDoctorId);
-        
-        setTimeout(() => {
-            const doctorAppointments = appointments.filter(apt => 
-                apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId
-            );
-            console.log('- Appointments para médico/clínica activos:', doctorAppointments.length);
-            
-            if (doctorAppointments.length === 0) {
-                console.log('❌ No hay appointments para mostrar');
-                console.log('💡 Prueba cambiando de médico o clínica');
-                window.testDifferentDoctors();
-            } else {
-                console.log('✅ Appointments encontrados:', doctorAppointments);
-            }
-        }, 100);
-    }
-}, [activeTab, appointments, activeClinicId, activeDoctorId]);
+            const timeSlots = generateTimeSlots();
+            const availableTimeSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
 
             // Status indicator
             const StatusIndicator = () => {
@@ -1320,23 +1248,42 @@ useEffect(() => {
                 );
             };
 
-            // Generar horas disponibles
-            const generateTimeSlots = () => {
-                const slots = [];
-                for (let hour = 8; hour <= 17; hour++) {
-                    for (let minute = 0; minute < 60; minute += 30) {
-                        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        slots.push(timeString);
-                    }
-                }
-                return slots;
-            };
+            // Debug Panel
+            const DebugPanel = () => {
+                if (!debugMode) return null;
 
-            const timeSlots = generateTimeSlots();
-            const availableTimeSlots = getAvailableTimeSlots(appointmentForm.date);
+                return (
+                    <div className="debug-panel">
+                        <div className="mb-2 font-bold">🔍 Debug Info</div>
+                        <div>Total appointments: {debugInfo.appointments}</div>
+                        <div>Active clinic: {debugInfo.activeClinicId}</div>
+                        <div>Active doctor: {debugInfo.activeDoctorId}</div>
+                        <div>Active tab: {debugInfo.activeTab}</div>
+                        <div>Clinic appointments: {debugInfo.appointmentsForActiveClinic}</div>
+                        <div>Doctor appointments: {debugInfo.appointmentsForActiveDoctor}</div>
+                        <div>Today appointments: {debugInfo.todayAppointments}</div>
+                        <div className="mt-2 text-xs">
+                            <button 
+                                onClick={testAddAppointment}
+                                className="bg-blue-500 text-white px-2 py-1 rounded mr-2"
+                            >
+                                Test Add
+                            </button>
+                            <button 
+                                onClick={() => console.log('Appointments:', appointments)}
+                                className="bg-green-500 text-white px-2 py-1 rounded"
+                            >
+                                Log All
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
 
             return (
                 <div className="min-h-screen bg-gray-50">
+                    <DebugPanel />
+                    
                     {/* Header */}
                     <header className="bg-blue-600 text-white shadow-lg">
                         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -1349,6 +1296,13 @@ useEffect(() => {
                                     <StatusIndicator />
                                 </div>
                                 <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => setDebugMode(!debugMode)}
+                                        className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                                    >
+                                        <Icons.Bug />
+                                        Debug {debugMode ? 'OFF' : 'ON'}
+                                    </button>
                                     <button
                                         onClick={manualSync}
                                         disabled={loading}
@@ -1803,7 +1757,8 @@ useEffect(() => {
                                                                     quantity: med.quantity.toString(),
                                                                     minStock: med.minStock.toString(),
                                                                     representative: med.representative || '',
-                                                                    phone: med.phone || ''
+                                                                    phone: med.phone || '',
+                                                                    clinicId: med.clinicId
                                                                 });
                                                             }}
                                                             disabled={loading}
@@ -2001,7 +1956,7 @@ useEffect(() => {
                                 {/* Selector de Médicos */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex flex-wrap gap-4">
-                                                        {doctors.map(doctor => (
+                                        {doctors.map(doctor => (
                                             <button
                                                 key={doctor.id}
                                                 onClick={() => setActiveDoctorId(doctor.id)}
@@ -2106,7 +2061,8 @@ useEffect(() => {
                                                                                 type: apt.type,
                                                                                 notes: apt.notes || '',
                                                                                 status: apt.status,
-                                                                                doctorId: apt.doctorId
+                                                                                doctorId: apt.doctorId,
+                                                                                clinicId: apt.clinicId
                                                                             });
                                                                         }}
                                                                     >
@@ -2137,11 +2093,11 @@ useEffect(() => {
                                             </p>
                                         </div>
                                         <div className="p-6">
-                                                                                                        <h4 className="font-medium mb-3">Citas de Hoy en {clinics.find(c => c.id === activeClinicId)?.name}</h4>
+                                            <h4 className="font-medium mb-3">Citas de Hoy en {clinics.find(c => c.id === activeClinicId)?.name}</h4>
                                             {getTodayAppointments(activeDoctorId, activeClinicId).length === 0 ? (
                                                 <p className="text-gray-500 text-sm">No hay citas programadas para hoy</p>
                                             ) : (
-                                                                                                                <div className="space-y-3">
+                                                <div className="space-y-3">
                                                     {getTodayAppointments(activeDoctorId, activeClinicId).map(apt => (
                                                         <div key={apt.id} className="border border-gray-200 rounded-lg p-3">
                                                             <div className="flex justify-between items-start mb-2">
@@ -2176,7 +2132,8 @@ useEffect(() => {
                                                                             type: apt.type,
                                                                             notes: apt.notes || '',
                                                                             status: apt.status,
-                                                                            doctorId: apt.doctorId
+                                                                            doctorId: apt.doctorId,
+                                                                            clinicId: apt.clinicId
                                                                         });
                                                                     }}
                                                                     className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs flex items-center justify-center gap-1 transition-colors"
@@ -2935,7 +2892,8 @@ useEffect(() => {
                                                                     type: apt.type,
                                                                     notes: apt.notes || '',
                                                                     status: apt.status,
-                                                                    doctorId: apt.doctorId
+                                                                    doctorId: apt.doctorId,
+                                                                    clinicId: apt.clinicId
                                                                 });
                                                                 setShowDayAppointments(false);
                                                             }}
