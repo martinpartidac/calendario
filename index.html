@@ -303,6 +303,166 @@
             const [loading, setLoading] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState('checking');
             const [lastSync, setLastSync] = useState(null);
+            // Agregar esto DENTRO de tu componente React, después de todas las definiciones de useState
+
+// Hacer las variables accesibles globalmente para debug
+useEffect(() => {
+    // Exponer variables para debug
+    window.appointments = appointments;
+    window.activeClinicId = activeClinicId;
+    window.activeDoctorId = activeDoctorId;
+    window.activeTab = activeTab;
+    window.setActiveTab = setActiveTab;
+    window.medications = medications;
+    window.salesHistory = salesHistory;
+    
+    console.log('🔗 Variables expuestas para debug:', {
+        appointments: appointments.length,
+        activeClinicId,
+        activeDoctorId,
+        activeTab
+    });
+}, [appointments, activeClinicId, activeDoctorId, activeTab, medications, salesHistory]);
+
+// Funciones de debug específicas
+useEffect(() => {
+    window.debugReactState = () => {
+        console.log('🔍 REACT STATE DEBUG:');
+        console.log('- appointments:', appointments);
+        console.log('- appointments.length:', appointments.length);
+        console.log('- activeClinicId:', activeClinicId);
+        console.log('- activeDoctorId:', activeDoctorId);
+        console.log('- activeTab:', activeTab);
+        console.log('- medications:', medications.length);
+        console.log('- salesHistory:', salesHistory.length);
+        
+        // Appointments para clínica activa
+        const clinicAppointments = appointments.filter(apt => apt.clinicId === activeClinicId);
+        console.log('- Appointments para clínica activa:', clinicAppointments.length);
+        
+        // Appointments para médico activo
+        const doctorAppointments = appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId);
+        console.log('- Appointments para médico activo:', doctorAppointments.length);
+        
+        // Appointments de hoy
+        const today = new Date().toISOString().split('T')[0];
+        const todayAppointments = appointments.filter(apt => apt.date === today && apt.clinicId === activeClinicId);
+        console.log('- Appointments de hoy:', todayAppointments.length);
+        
+        if (appointments.length > 0) {
+            console.log('📋 Todos los appointments:');
+            appointments.forEach((apt, index) => {
+                console.log(`${index + 1}. ${apt.patientName} - ${apt.date} ${apt.time} - Dr:${apt.doctorId} - Clínica:${apt.clinicId}`);
+            });
+        }
+        
+        return {
+            total: appointments.length,
+            forClinic: clinicAppointments.length,
+            forDoctor: doctorAppointments.length,
+            today: todayAppointments.length
+        };
+    };
+    
+    window.debugAppointmentFlow = () => {
+        console.log('🔍 APPOINTMENT FLOW DEBUG:');
+        console.log('1. Tab actual:', activeTab);
+        console.log('2. Appointments totales:', appointments.length);
+        console.log('3. Clínica activa:', activeClinicId);
+        console.log('4. Médico activo:', activeDoctorId);
+        
+        if (activeTab === 'appointments') {
+            console.log('✅ Está en tab appointments');
+            
+            const doctorAppointments = appointments.filter(apt => 
+                apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId
+            );
+            console.log('5. Appointments para médico activo:', doctorAppointments.length);
+            
+            if (doctorAppointments.length > 0) {
+                console.log('✅ Debería mostrar appointments');
+                console.log('📋 Appointments a mostrar:', doctorAppointments);
+            } else {
+                console.log('❌ No hay appointments para mostrar');
+                console.log('🔍 Razones posibles:');
+                console.log('- ¿Appointments para otra clínica?', appointments.filter(apt => apt.clinicId !== activeClinicId).length);
+                console.log('- ¿Appointments para otro médico?', appointments.filter(apt => apt.doctorId !== activeDoctorId).length);
+            }
+        } else {
+            console.log('❌ No está en tab appointments');
+        }
+    };
+    
+    window.switchToAppointments = () => {
+        console.log('🔄 Cambiando a tab appointments...');
+        setActiveTab('appointments');
+        
+        setTimeout(() => {
+            window.debugAppointmentFlow();
+        }, 500);
+    };
+    
+    window.forceAppointmentReload = async () => {
+        console.log('🔄 Forzando recarga de appointments...');
+        
+        try {
+            const result = await API.getAppointments();
+            console.log('📅 Appointments recargados:', result);
+            
+            if (result.success) {
+                setAppointments(result.data || []);
+                console.log('✅ Appointments actualizados en React');
+                return result.data || [];
+            } else {
+                console.log('❌ Error recargando appointments:', result.message);
+                return [];
+            }
+        } catch (error) {
+            console.error('❌ Error:', error);
+            return [];
+        }
+    };
+    
+    console.log('🔗 Funciones de debug React creadas:');
+    console.log('- window.debugReactState()');
+    console.log('- window.debugAppointmentFlow()');
+    console.log('- window.switchToAppointments()');
+    console.log('- window.forceAppointmentReload()');
+    
+}, [appointments, activeClinicId, activeDoctorId, activeTab, setActiveTab]);
+
+// Debug automático cuando cambian los appointments
+useEffect(() => {
+    console.log('🔄 Appointments cambiaron:', appointments.length);
+    
+    if (appointments.length > 0) {
+        console.log('📅 Primer appointment:', appointments[0]);
+        console.log('📅 Appointments por clínica:');
+        const byClinic = appointments.reduce((acc, apt) => {
+            acc[apt.clinicId] = (acc[apt.clinicId] || 0) + 1;
+            return acc;
+        }, {});
+        console.log(byClinic);
+    }
+}, [appointments]);
+
+// Debug automático cuando cambia el tab
+useEffect(() => {
+    console.log('🔄 Tab cambió a:', activeTab);
+    
+    if (activeTab === 'appointments') {
+        console.log('📅 Entrando a tab appointments');
+        console.log('- Appointments disponibles:', appointments.length);
+        console.log('- Clínica activa:', activeClinicId);
+        console.log('- Médico activo:', activeDoctorId);
+        
+        // Verificar appointments para mostrar
+        const toShow = appointments.filter(apt => 
+            apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId
+        );
+        console.log('- Appointments a mostrar:', toShow.length);
+    }
+}, [activeTab, appointments, activeClinicId, activeDoctorId]);
 
             // Estados del formulario
             const [formData, setFormData] = useState({
