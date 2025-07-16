@@ -142,44 +142,35 @@
 
             // Extraer solo la hora de un string de tiempo o fecha completa
             extractTimeOnly: (timeString) => {
-                if (!timeString) return '';
-                
-                // Si ya es formato HH:MM
-                if (typeof timeString === 'string' && timeString.match(/^\d{1,2}:\d{2}$/)) {
-                    return timeString;
-                }
-                
-                // Si es un string ISO completo como "1899-12-30T22:11:16.000Z"
-                if (typeof timeString === 'string' && timeString.includes('T')) {
-                    const timePart = timeString.split('T')[1];
-                    if (timePart) {
-                        const timeOnly = timePart.split('.')[0]; // Quitar milisegundos
-                        const [hours, minutes] = timeOnly.split(':');
-                        return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-                    }
-                }
-                
-                // Si es un objeto Date
-                if (timeString instanceof Date) {
-                    const hours = timeString.getHours().toString().padStart(2, '0');
-                    const minutes = timeString.getMinutes().toString().padStart(2, '0');
-                    return `${hours}:${minutes}`;
-                }
-                
-                // Si es otro formato, intenta convertirlo
-                try {
-                    const date = new Date(timeString);
-                    if (!isNaN(date.getTime())) {
-                        const hours = date.getHours().toString().padStart(2, '0');
-                        const minutes = date.getMinutes().toString().padStart(2, '0');
-                        return `${hours}:${minutes}`;
-                    }
-                } catch (e) {
-                    console.warn('Could not parse time:', timeString);
-                }
-                
-                return timeString.toString();
-            },
+    if (!timeString) return '';
+
+    // Si ya es formato HH:MM, retorna como está
+    if (typeof timeString === 'string' && timeString.match(/^\d{1,2}:\d{2}$/)) {
+        return timeString;
+    }
+    
+    let date;
+    // Si es una cadena ISO completa como "1899-12-30T22:11:16.000Z"
+    if (typeof timeString === 'string' && timeString.includes('T')) {
+        date = new Date(timeString); // Esto lo analiza en la hora local
+    } else {
+        // Intenta analizar otros formatos, o si ya es un objeto Date
+        try {
+            date = new Date(timeString);
+        } catch (e) {
+            console.warn('Could not parse time:', timeString);
+            return timeString.toString(); // Retorna el original si el análisis falla
+        }
+    }
+
+    if (!isNaN(date.getTime())) {
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+    }
+    
+    return timeString.toString(); // Fallback
+},
 
             // Comparar si dos fechas son iguales (solo fecha, no hora)
             areSameDate: (date1, date2) => {
