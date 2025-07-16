@@ -642,23 +642,38 @@
             }, [activeClinicId]);
 
             // Búsqueda inteligente filtrada por clínica
+            // Búsqueda inteligente filtrada por clínica
             const filteredMedications = useMemo(() => {
                 const clinicMedications = medications.filter(med => med.clinicId === activeClinicId);
-                if (!searchTerm) return clinicMedications;
                 
-                const term = searchTerm.toLowerCase();
-                return clinicMedications.filter(med => {
-                    const searchFields = [
-                        med.name || '',
-                        med.activeSubstance || '',
-                        med.representative || '',
-                        med.phone || '',
-                        med.presentation || ''
-                    ].join(' ').toLowerCase();
-                    
-                    return searchFields.includes(term);
+                let results = clinicMedications;
+
+                if (searchTerm) {
+                    const term = searchTerm.toLowerCase();
+                    results = clinicMedications.filter(med => {
+                        const searchFields = [
+                            med.name || '',
+                            med.activeSubstance || '',
+                            med.representative || '',
+                            med.phone || '',
+                            med.presentation || ''
+                        ].join(' ').toLowerCase();
+                        
+                        return searchFields.includes(term);
+                    });
+                }
+
+                // Ordenar alfabéticamente por nombre
+                results.sort((a, b) => {
+                    const nameA = a.name ? a.name.toLowerCase() : '';
+                    const nameB = b.name ? b.name.toLowerCase() : '';
+                    return nameA.localeCompare(nameB);
                 });
+
+                return results;
             }, [medications, searchTerm, activeClinicId]);
+
+            
 
             // Medicamentos con stock bajo filtrados por clínica
             const lowStockMeds = medications.filter(med => med.quantity <= med.minStock && med.clinicId === activeClinicId);
