@@ -1,54 +1,4 @@
-const deleteAppointment = async (id) => {
-                if (!confirm('¿Está seguro de eliminar esta cita?')) return;
-
-                try {
-                    setLoading(true);
-
-                    // Intentar eliminar en Google Sheets solo si estamos online
-                    if (connectionStatus === 'online') {
-                        try {
-                            await API.deleteAppointment(id);
-                            setLastSync(new Date());
-                            
-                            // Si funcionó, eliminar localmente también
-                            setAppointments(prev => {
-                                const updated = prev.filter(apt => apt.id !== id);
-                                console.log('📅 Appointment deleted successfully, remaining:', updated.length);
-                                return updated;
-                            });
-                            alert('Cita eliminada exitosamente');
-                            
-                        } catch (apiError) {
-                            console.error('Error deleting appointment from Google Sheets:', apiError);
-                            setConnectionStatus('error');
-                            
-                            // Si falla la API, preguntar si quiere eliminar solo localmente
-                            if (confirm('Error al sincronizar con Google Sheets. ¿Desea eliminar solo localmente? (Podrá sincronizar después)')) {
-                                setAppointments(prev => {
-                                    const updated = prev.filter(apt => apt.id !== id);
-                                    console.log('📅 Appointment deleted locally, remaining:', updated.length);
-                                    return updated;
-                                });
-                                alert('Cita eliminada localmente. Sincroniza cuando tengas conexión.');
-                            }
-                        }
-                    } else {
-                        // Si estamos offline, eliminar solo localmente
-                        setAppointments(prev => {
-                            const updated = prev.filter(apt => apt.id !== id);
-                            console.log('📅 Appointment deleted offline, remaining:', updated.length);
-                            return updated;
-                        });
-                        alert('Cita eliminada localmente (sin conexión a Google Sheets)');
-                    }
-
-                } catch (error) {
-                    console.error('Error general deleting appointment:', error);
-                    alert('Error inesperado al eliminar cita');
-                } finally {
-                    setLoading(false);
-                }
-            };<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -256,28 +206,16 @@ const deleteAppointment = async (id) => {
                 return typeof value === 'number' ? value : value;
             },
 
-            // Normalizar appointment data (solo para datos que vienen de Google Sheets)
-            normalizeAppointment: (apt, fromAPI = false) => {
-                const normalized = {
+            // Normalizar appointment data
+            normalizeAppointment: (apt) => {
+                return {
                     ...apt,
                     id: DataHelper.ensureNumber(apt.id),
                     doctorId: DataHelper.ensureNumber(apt.doctorId) || 1,
                     clinicId: DataHelper.ensureNumber(apt.clinicId) || 1,
-                    date: DateHelper.extractDateOnly(apt.date)
+                    date: DateHelper.extractDateOnly(apt.date), // Extraer solo la fecha
+                    time: DateHelper.extractTimeOnly(apt.time)   // Extraer solo la hora
                 };
-
-                // Solo normalizar la hora si viene de la API (Google Sheets)
-                // Las citas nuevas creadas localmente ya tienen formato correcto
-                if (fromAPI && apt.time && (apt.time.includes('T') || apt.time.includes('1899'))) {
-                    normalized.time = DateHelper.extractTimeOnly(apt.time);
-                    console.log('🕐 Normalized time from API:', apt.time, '→', normalized.time);
-                } else {
-                    // Mantener la hora original si ya está en formato correcto
-                    normalized.time = apt.time;
-                    console.log('🕐 Keeping original time:', apt.time);
-                }
-
-                return normalized;
             }
         };
 
@@ -401,61 +339,31 @@ const deleteAppointment = async (id) => {
                     
                     if (data && Object.keys(data).length > 0) {
                         if (action === 'deleteMedication' || action === 'deleteAppointment') {
-                            console.log(`🗑️ Delete operation - ID: ${data}, Type: ${typeof data}`);
                             formData.append('id', data.toString());
                         } else {
                             formData.append('data', JSON.stringify(data));
                         }
                     }
 
-                    console.log(`📤 Sending request to: ${GOOGLE_SCRIPT_URL}`);
-                    console.log(`📤 FormData contents:`, {
-                        action: formData.get('action'),
-                        id: formData.get('id'),
-                        data: formData.get('data')
-                    });
-
                     const response = await fetch(GOOGLE_SCRIPT_URL, {
                         method: 'POST',
                         body: formData
                     });
 
-                    console.log(`📥 Response status: ${response.status} ${response.statusText}`);
-                    console.log(`📥 Response headers:`, Object.fromEntries(response.headers.entries()));
-
                     if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error(`❌ HTTP Error Response:`, errorText);
-                        throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
 
-                    const responseText = await response.text();
-                    console.log(`📥 Raw response text:`, responseText);
-
-                    let result;
-                    try {
-                        result = JSON.parse(responseText);
-                    } catch (parseError) {
-                        console.error(`❌ JSON Parse Error:`, parseError);
-                        console.error(`❌ Response was:`, responseText);
-                        throw new Error(`Invalid JSON response: ${responseText}`);
-                    }
-
-                    console.log(`✅ Parsed API Response for ${action}:`, result);
+                    const result = await response.json();
+                    console.log(`✅ API Response: ${action}`, result);
                     
                     if (!result.success) {
-                        console.error(`❌ API returned error:`, result.error);
-                        throw new Error(result.error || 'Error desconocido del servidor');
+                        throw new Error(result.error || 'Error desconocido');
                     }
 
                     return result;
                 } catch (error) {
-                    console.error(`❌ API Error in ${action}:`, {
-                        message: error.message,
-                        stack: error.stack,
-                        data: data,
-                        action: action
-                    });
+                    console.error(`❌ API Error: ${action}`, error);
                     throw error;
                 }
             },
@@ -477,9 +385,9 @@ const deleteAppointment = async (id) => {
             },
 
             async deleteMedication(id) {
-                console.log('🗑️ API: Deleting medication with ID:', id, 'Type:', typeof id);
+                console.log('API: Deleting medication with ID:', id);
                 const result = await this.call('deleteMedication', id);
-                console.log('🗑️ API: Delete medication result:', result);
+                console.log('API: Delete result:', result);
                 return result;
             },
 
@@ -491,30 +399,31 @@ const deleteAppointment = async (id) => {
                 return await this.call('addSale', sale);
             },
 
-            // API Functions para Google Sheets
-            const API = {
-                async addAppointment(appointment) {
-                    console.log('📅 API: Adding appointment to Google Sheets:', appointment);
-                    console.log('🕐 API: Time being sent:', appointment.time, 'Type:', typeof appointment.time);
-                    
-                    const result = await this.call('addAppointment', appointment);
-                    console.log('📅 API: Add appointment result:', result);
-                    return result;
-                },
+            // Funciones para citas
+            async getAppointments() {
+                const result = await this.call('getAppointments');
+                console.log('📅 Appointments loaded from API:', result);
+                return result;
+            },
 
-                async updateAppointment(appointment) {
-                    console.log('📅 API: Updating appointment in Google Sheets:', appointment);
-                    console.log('🕐 API: Time being sent:', appointment.time, 'Type:', typeof appointment.time);
-                    
-                    const result = await this.call('updateAppointment', appointment);
-                    console.log('📅 API: Update appointment result:', result);
-                    return result;
-                },
+            async addAppointment(appointment) {
+                console.log('📅 Adding appointment:', appointment);
+                const result = await this.call('addAppointment', appointment);
+                console.log('📅 Add appointment result:', result);
+                return result;
+            },
+
+            async updateAppointment(appointment) {
+                console.log('📅 Updating appointment:', appointment);
+                const result = await this.call('updateAppointment', appointment);
+                console.log('📅 Update appointment result:', result);
+                return result;
+            },
 
             async deleteAppointment(id) {
-                console.log('🗑️ API: Deleting appointment with ID:', id, 'Type:', typeof id);
+                console.log('📅 Deleting appointment with ID:', id);
                 const result = await this.call('deleteAppointment', id);
-                console.log('🗑️ API: Delete appointment result:', result);
+                console.log('📅 Delete appointment result:', result);
                 return result;
             }
         };
@@ -578,15 +487,6 @@ const deleteAppointment = async (id) => {
                 clinicId: 1
             });
 
-            // Debug para formulario de citas
-            useEffect(() => {
-                console.log('🕐 Appointment form time changed:', {
-                    time: appointmentForm.time,
-                    typeof: typeof appointmentForm.time,
-                    fullForm: appointmentForm
-                });
-            }, [appointmentForm.time]);
-
             const presentations = [
                 'Tabletas', 'Cápsulas', 'Jarabe', 'Inyección', 
                 'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel'
@@ -630,16 +530,14 @@ const deleteAppointment = async (id) => {
                     appointmentsForActiveDoctor: appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId).length,
                     todayAppointments: todayAppointments.length,
                     todayDate: todayStr,
-                    sampleAppointments: appointments.slice(0, 5).map(apt => ({
+                    sampleAppointments: appointments.slice(0, 3).map(apt => ({
                         id: apt.id,
                         originalDate: apt.date,
                         extractedDate: DateHelper.extractDateOnly(apt.date),
                         patientName: apt.patientName,
                         doctorId: apt.doctorId,
                         clinicId: apt.clinicId,
-                        time: apt.time, // Hora tal como está guardada
-                        timeType: typeof apt.time,
-                        displayTime: DateHelper.extractTimeOnly(apt.time) // Hora como se muestra
+                        time: apt.time
                     }))
                 };
             }, [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
@@ -679,11 +577,8 @@ const deleteAppointment = async (id) => {
                     // Procesar citas con normalización de datos
                     const rawAppointments = appointmentsResult.data || [];
                     const processedAppointments = rawAppointments.map(apt => {
-                        const normalized = DataHelper.normalizeAppointment(apt, true); // true = viene de API
-                        console.log('📅 Normalized appointment from API:', {
-                            original: apt,
-                            normalized: normalized
-                        });
+                        const normalized = DataHelper.normalizeAppointment(apt);
+                        console.log('📅 Normalized appointment:', normalized);
                         return normalized;
                     });
                     
@@ -706,7 +601,7 @@ const deleteAppointment = async (id) => {
                     if (savedSales) setSalesHistory(JSON.parse(savedSales));
                     if (savedAppointments) {
                         const localAppointments = JSON.parse(savedAppointments);
-                        const processedLocal = localAppointments.map(apt => DataHelper.normalizeAppointment(apt, false)); // false = local
+                        const processedLocal = localAppointments.map(apt => DataHelper.normalizeAppointment(apt));
                         console.log('📅 Loaded appointments from localStorage:', processedLocal);
                         setAppointments(processedLocal);
                     }
@@ -1055,35 +950,20 @@ const deleteAppointment = async (id) => {
                 try {
                     setLoading(true);
 
-                    // Intentar eliminar en Google Sheets solo si estamos online
                     if (connectionStatus === 'online') {
-                        try {
-                            await API.deleteMedication(id);
-                            setLastSync(new Date());
-                            
-                            // Si funcionó, eliminar localmente también
-                            setMedications(prev => prev.filter(med => med.id !== id));
-                            alert('Medicamento eliminado exitosamente');
-                            
-                        } catch (apiError) {
-                            console.error('Error deleting from Google Sheets:', apiError);
-                            setConnectionStatus('error');
-                            
-                            // Si falla la API, preguntar si quiere eliminar solo localmente
-                            if (confirm('Error al sincronizar con Google Sheets. ¿Desea eliminar solo localmente? (Podrá sincronizar después)')) {
-                                setMedications(prev => prev.filter(med => med.id !== id));
-                                alert('Medicamento eliminado localmente. Sincroniza cuando tengas conexión.');
-                            }
-                        }
-                    } else {
-                        // Si estamos offline, eliminar solo localmente
-                        setMedications(prev => prev.filter(med => med.id !== id));
-                        alert('Medicamento eliminado localmente (sin conexión a Google Sheets)');
+                        await API.deleteMedication(id);
+                        setLastSync(new Date());
                     }
 
+                    setMedications(prev => prev.filter(med => med.id !== id));
+                    alert('Medicamento eliminado exitosamente');
+
                 } catch (error) {
-                    console.error('Error general deleting medication:', error);
-                    alert('Error inesperado al eliminar medicamento');
+                    console.error('Error deleting medication:', error);
+                    setConnectionStatus('error');
+                    
+                    setMedications(prev => prev.filter(med => med.id !== id));
+                    alert('Error al sincronizar con Google Sheets, pero se eliminó localmente.');
                 } finally {
                     setLoading(false);
                 }
@@ -1133,26 +1013,22 @@ const deleteAppointment = async (id) => {
                     return;
                 }
 
-                // IMPORTANTE: Mantener la hora como string simple, sin conversiones
-                const timeString = appointmentForm.time; // Mantener como "09:00"
-                console.log('🕐 Original time from form:', timeString);
+                // Normalizar la hora para comparación
+                const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
 
-                // Verificar disponibilidad usando la hora original
-                const existingAppointment = appointments.find(apt => {
-                    const aptDate = DateHelper.extractDateOnly(apt.date);
-                    const aptTime = DateHelper.extractTimeOnly(apt.time);
-                    
-                    return aptDate === appointmentForm.date && 
-                           aptTime === timeString &&
-                           apt.doctorId === appointmentForm.doctorId &&
-                           apt.clinicId === appointmentForm.clinicId &&
-                           (!editingAppointment || apt.id !== editingAppointment.id);
-                });
+                // Verificar disponibilidad
+                const existingAppointment = appointments.find(apt => 
+                    DateHelper.extractDateOnly(apt.date) === appointmentForm.date && 
+                    DateHelper.extractTimeOnly(apt.time) === normalizedTime &&
+                    apt.doctorId === appointmentForm.doctorId &&
+                    apt.clinicId === appointmentForm.clinicId &&
+                    (!editingAppointment || apt.id !== editingAppointment.id)
+                );
 
                 if (existingAppointment) {
                     const doctor = doctors.find(d => d.id === appointmentForm.doctorId);
                     const clinic = clinics.find(c => c.id === appointmentForm.clinicId);
-                    alert(`${doctor.name} ya tiene una cita programada para las ${timeString} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
+                    alert(`${doctor.name} ya tiene una cita programada para las ${normalizedTime} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
                     return;
                 }
 
@@ -1165,7 +1041,7 @@ const deleteAppointment = async (id) => {
                         phone: appointmentForm.phone,
                         email: appointmentForm.email,
                         date: appointmentForm.date,
-                        time: timeString, // Guardar hora como string simple
+                        time: normalizedTime, // Guardar hora normalizada
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
@@ -1174,17 +1050,17 @@ const deleteAppointment = async (id) => {
                         createdAt: new Date().toISOString()
                     };
 
-                    console.log('📅 Adding new appointment with time:', newAppointment.time);
+                    console.log('📅 Adding new appointment:', newAppointment);
 
                     if (connectionStatus === 'online') {
                         await API.addAppointment(newAppointment);
                         setLastSync(new Date());
                     }
 
-                    // NO normalizar la hora aquí para evitar conversiones
+                    const normalizedAppointment = DataHelper.normalizeAppointment(newAppointment);
                     setAppointments(prev => {
-                        const updated = [...prev, newAppointment];
-                        console.log('📅 Appointment added, time saved as:', newAppointment.time);
+                        const updated = [...prev, normalizedAppointment];
+                        console.log('📅 Appointments updated, total:', updated.length);
                         return updated;
                     });
                     
@@ -1207,26 +1083,22 @@ const deleteAppointment = async (id) => {
                     return;
                 }
 
-                // IMPORTANTE: Mantener la hora como string simple
-                const timeString = appointmentForm.time;
-                console.log('🕐 Updating with time:', timeString);
+                // Normalizar la hora para comparación
+                const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
 
                 // Verificar disponibilidad
-                const existingAppointment = appointments.find(apt => {
-                    const aptDate = DateHelper.extractDateOnly(apt.date);
-                    const aptTime = DateHelper.extractTimeOnly(apt.time);
-                    
-                    return aptDate === appointmentForm.date && 
-                           aptTime === timeString &&
-                           apt.doctorId === appointmentForm.doctorId &&
-                           apt.clinicId === appointmentForm.clinicId &&
-                           apt.id !== editingAppointment.id;
-                });
+                const existingAppointment = appointments.find(apt => 
+                    DateHelper.extractDateOnly(apt.date) === appointmentForm.date && 
+                    DateHelper.extractTimeOnly(apt.time) === normalizedTime &&
+                    apt.doctorId === appointmentForm.doctorId &&
+                    apt.clinicId === appointmentForm.clinicId &&
+                    apt.id !== editingAppointment.id
+                );
 
                 if (existingAppointment) {
                     const doctor = doctors.find(d => d.id === appointmentForm.doctorId);
                     const clinic = clinics.find(c => c.id === appointmentForm.clinicId);
-                    alert(`${doctor.name} ya tiene una cita programada para las ${timeString} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
+                    alert(`${doctor.name} ya tiene una cita programada para las ${normalizedTime} el ${appointmentForm.date} en ${clinic.name}. Por favor seleccione otro horario.`);
                     return;
                 }
 
@@ -1239,7 +1111,7 @@ const deleteAppointment = async (id) => {
                         phone: appointmentForm.phone,
                         email: appointmentForm.email,
                         date: appointmentForm.date,
-                        time: timeString, // Guardar hora como string simple
+                        time: normalizedTime, // Guardar hora normalizada
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
@@ -1247,16 +1119,16 @@ const deleteAppointment = async (id) => {
                         clinicId: appointmentForm.clinicId
                     };
 
-                    console.log('📅 Updating appointment with time:', updatedAppointment.time);
+                    console.log('📅 Updating appointment:', updatedAppointment);
 
                     if (connectionStatus === 'online') {
                         await API.updateAppointment(updatedAppointment);
                         setLastSync(new Date());
                     }
                     
-                    // NO normalizar para evitar conversiones
+                    const normalizedAppointment = DataHelper.normalizeAppointment(updatedAppointment);
                     setAppointments(prev => prev.map(apt => 
-                        apt.id === editingAppointment.id ? updatedAppointment : apt
+                        apt.id === editingAppointment.id ? normalizedAppointment : apt
                     ));
                     
                     resetAppointmentForm();
@@ -1416,129 +1288,34 @@ const deleteAppointment = async (id) => {
 
             // Test functions
             const testAddAppointment = async () => {
-                const fixedTime = '09:00'; // Forzar hora específica
-                
                 const testAppointment = {
                     id: Date.now(),
-                    patientName: 'TEST - Hora Fija',
+                    patientName: 'Paciente Test',
                     phone: '123-456-7890',
                     email: 'test@test.com',
                     date: DateHelper.getTodayString(),
-                    time: fixedTime, // Usar hora fija
+                    time: '09:00',
                     type: 'Consulta',
-                    notes: `Test: hora forzada a ${fixedTime}`,
+                    notes: 'Cita de prueba',
                     status: 'Programada',
                     doctorId: 1,
                     clinicId: 1,
                     createdAt: new Date().toISOString()
                 };
 
-                console.log('🧪 FORCED TEST - Creating appointment with fixed time:', testAppointment);
-                console.log('🕐 FORCED TEST - Time details:', {
-                    originalTime: fixedTime,
-                    appointmentTime: testAppointment.time,
-                    typeof: typeof testAppointment.time,
-                    equals: testAppointment.time === fixedTime
-                });
+                console.log('🧪 Testing add appointment:', testAppointment);
 
                 try {
-                    // BYPASS Google Sheets for this test - save only locally
-                    console.log('🧪 FORCED TEST - Saving locally (bypassing Google Sheets)');
-                    
-                    setAppointments(prev => {
-                        const updated = [...prev, testAppointment];
-                        console.log('🧪 FORCED TEST - Appointment saved locally with time:', testAppointment.time);
-                        
-                        // Verify the saved appointment
-                        const savedAppointment = updated[updated.length - 1];
-                        console.log('🧪 FORCED TEST - Saved appointment verification:', {
-                            savedTime: savedAppointment.time,
-                            typeof: typeof savedAppointment.time,
-                            stillCorrect: savedAppointment.time === fixedTime
-                        });
-                        
-                        return updated;
-                    });
-                    
-                    alert(`TEST: Cita creada con hora FORZADA ${fixedTime}. Verifica que aparezca exactamente a esa hora.`);
+                    if (connectionStatus === 'online') {
+                        await API.addAppointment(testAppointment);
+                    }
+                    const normalizedAppointment = DataHelper.normalizeAppointment(testAppointment);
+                    setAppointments(prev => [...prev, normalizedAppointment]);
+                    alert('Cita de prueba agregada');
                 } catch (error) {
-                    console.error('🧪 FORCED TEST - Error:', error);
-                    alert('Error en test forzado: ' + error.message);
+                    console.error('Error in test:', error);
+                    alert('Error en prueba');
                 }
-            };
-
-            const testGoogleSheetsTime = async () => {
-                if (connectionStatus !== 'online') {
-                    alert('Necesitas estar conectado a Google Sheets para este test');
-                    return;
-                }
-
-                const testAppointment = {
-                    id: Date.now(),
-                    patientName: 'TEST - Google Sheets',
-                    phone: '123-456-7890',
-                    email: 'test@sheets.com',
-                    date: DateHelper.getTodayString(),
-                    time: '10:30', // Hora específica para testear Google Sheets
-                    type: 'Consulta',
-                    notes: 'Test de Google Sheets - debería mantener 10:30',
-                    status: 'Programada',
-                    doctorId: 1,
-                    clinicId: 1,
-                    createdAt: new Date().toISOString()
-                };
-
-                console.log('🧪 SHEETS TEST - Sending to Google Sheets:', testAppointment);
-
-                try {
-                    const result = await API.addAppointment(testAppointment);
-                    console.log('🧪 SHEETS TEST - Google Sheets response:', result);
-                    
-                    // Agregar localmente también
-                    setAppointments(prev => [...prev, testAppointment]);
-                    
-                    alert(`TEST: Cita enviada a Google Sheets con hora 10:30. Verifica en consola si Google Sheets devuelve la hora correcta.`);
-                } catch (error) {
-                    console.error('🧪 SHEETS TEST - Error:', error);
-                    alert('Error en test de Google Sheets: ' + error.message);
-                }
-            };
-
-            const testDeleteOperations = async () => {
-                console.log('🧪 Testing delete operations...');
-                
-                // Test 1: Verificar conexión
-                try {
-                    console.log('🧪 Test 1: Connection test');
-                    const testResult = await API.test();
-                    console.log('✅ Connection test passed:', testResult);
-                } catch (error) {
-                    console.error('❌ Connection test failed:', error);
-                    alert('Error de conexión básica: ' + error.message);
-                    return;
-                }
-
-                // Test 2: Intentar eliminar una cita que no existe
-                try {
-                    console.log('🧪 Test 2: Delete non-existent appointment');
-                    const fakeId = 99999999;
-                    const deleteResult = await API.deleteAppointment(fakeId);
-                    console.log('🧪 Delete fake appointment result:', deleteResult);
-                } catch (error) {
-                    console.error('🧪 Delete fake appointment error:', error);
-                }
-
-                // Test 3: Intentar eliminar un medicamento que no existe
-                try {
-                    console.log('🧪 Test 3: Delete non-existent medication');
-                    const fakeId = 99999999;
-                    const deleteResult = await API.deleteMedication(fakeId);
-                    console.log('🧪 Delete fake medication result:', deleteResult);
-                } catch (error) {
-                    console.error('🧪 Delete fake medication error:', error);
-                }
-
-                alert('Tests de eliminación completados. Revisa la consola para ver los resultados.');
             };
 
             // Backup manual
@@ -3117,15 +2894,11 @@ const deleteAppointment = async (id) => {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Hora * (Formato: HH:MM)
+                                                    Hora *
                                                 </label>
                                                 <select
                                                     value={appointmentForm.time}
-                                                    onChange={(e) => {
-                                                        const selectedTime = e.target.value;
-                                                        console.log('🕐 Time selected from dropdown:', selectedTime, 'Type:', typeof selectedTime);
-                                                        setAppointmentForm({...appointmentForm, time: selectedTime});
-                                                    }}
+                                                    onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                     disabled={loading}
                                                 >
@@ -3137,9 +2910,6 @@ const deleteAppointment = async (id) => {
                                                         <option value={appointmentForm.time}>{appointmentForm.time} (hora actual)</option>
                                                     )}
                                                 </select>
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                    Hora seleccionada: {appointmentForm.time} ({typeof appointmentForm.time})
-                                                </div>
                                             </div>
                                         </div>
 
