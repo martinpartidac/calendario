@@ -768,6 +768,13 @@
                     
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
+
+                // Añadir ordenación por hora
+                filtered.sort((a, b) => {
+                    const timeA = DateHelper.extractTimeOnly(a.time);
+                    const timeB = DateHelper.extractTimeOnly(b.time);
+                    return timeA.localeCompare(timeB);
+                });
                 
                 console.log(`📅 getTodayAppointments(doctor:${doctorId}, clinic:${targetClinicId}):`, {
                     found: filtered.length,
