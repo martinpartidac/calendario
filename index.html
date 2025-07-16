@@ -491,26 +491,25 @@ const deleteAppointment = async (id) => {
                 return await this.call('addSale', sale);
             },
 
-            // Funciones para citas
-            async getAppointments() {
-                const result = await this.call('getAppointments');
-                console.log('📅 Appointments loaded from API:', result);
-                return result;
-            },
+            // API Functions para Google Sheets
+            const API = {
+                async addAppointment(appointment) {
+                    console.log('📅 API: Adding appointment to Google Sheets:', appointment);
+                    console.log('🕐 API: Time being sent:', appointment.time, 'Type:', typeof appointment.time);
+                    
+                    const result = await this.call('addAppointment', appointment);
+                    console.log('📅 API: Add appointment result:', result);
+                    return result;
+                },
 
-            async addAppointment(appointment) {
-                console.log('📅 Adding appointment:', appointment);
-                const result = await this.call('addAppointment', appointment);
-                console.log('📅 Add appointment result:', result);
-                return result;
-            },
-
-            async updateAppointment(appointment) {
-                console.log('📅 Updating appointment:', appointment);
-                const result = await this.call('updateAppointment', appointment);
-                console.log('📅 Update appointment result:', result);
-                return result;
-            },
+                async updateAppointment(appointment) {
+                    console.log('📅 API: Updating appointment in Google Sheets:', appointment);
+                    console.log('🕐 API: Time being sent:', appointment.time, 'Type:', typeof appointment.time);
+                    
+                    const result = await this.call('updateAppointment', appointment);
+                    console.log('📅 API: Update appointment result:', result);
+                    return result;
+                },
 
             async deleteAppointment(id) {
                 console.log('🗑️ API: Deleting appointment with ID:', id, 'Type:', typeof id);
@@ -579,6 +578,15 @@ const deleteAppointment = async (id) => {
                 clinicId: 1
             });
 
+            // Debug para formulario de citas
+            useEffect(() => {
+                console.log('🕐 Appointment form time changed:', {
+                    time: appointmentForm.time,
+                    typeof: typeof appointmentForm.time,
+                    fullForm: appointmentForm
+                });
+            }, [appointmentForm.time]);
+
             const presentations = [
                 'Tabletas', 'Cápsulas', 'Jarabe', 'Inyección', 
                 'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel'
@@ -622,14 +630,16 @@ const deleteAppointment = async (id) => {
                     appointmentsForActiveDoctor: appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId).length,
                     todayAppointments: todayAppointments.length,
                     todayDate: todayStr,
-                    sampleAppointments: appointments.slice(0, 3).map(apt => ({
+                    sampleAppointments: appointments.slice(0, 5).map(apt => ({
                         id: apt.id,
                         originalDate: apt.date,
                         extractedDate: DateHelper.extractDateOnly(apt.date),
                         patientName: apt.patientName,
                         doctorId: apt.doctorId,
                         clinicId: apt.clinicId,
-                        time: apt.time
+                        time: apt.time, // Hora tal como está guardada
+                        timeType: typeof apt.time,
+                        displayTime: DateHelper.extractTimeOnly(apt.time) // Hora como se muestra
                     }))
                 };
             }, [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
@@ -1406,39 +1416,91 @@ const deleteAppointment = async (id) => {
 
             // Test functions
             const testAddAppointment = async () => {
+                const fixedTime = '09:00'; // Forzar hora específica
+                
                 const testAppointment = {
                     id: Date.now(),
-                    patientName: 'Paciente Test Hora',
+                    patientName: 'TEST - Hora Fija',
                     phone: '123-456-7890',
                     email: 'test@test.com',
                     date: DateHelper.getTodayString(),
-                    time: '09:00', // Hora específica para testear
+                    time: fixedTime, // Usar hora fija
                     type: 'Consulta',
-                    notes: 'Test de hora: debería mantenerse en 09:00',
+                    notes: `Test: hora forzada a ${fixedTime}`,
                     status: 'Programada',
                     doctorId: 1,
                     clinicId: 1,
                     createdAt: new Date().toISOString()
                 };
 
-                console.log('🧪 Testing add appointment with time:', testAppointment.time);
+                console.log('🧪 FORCED TEST - Creating appointment with fixed time:', testAppointment);
+                console.log('🕐 FORCED TEST - Time details:', {
+                    originalTime: fixedTime,
+                    appointmentTime: testAppointment.time,
+                    typeof: typeof testAppointment.time,
+                    equals: testAppointment.time === fixedTime
+                });
 
                 try {
-                    if (connectionStatus === 'online') {
-                        await API.addAppointment(testAppointment);
-                    }
+                    // BYPASS Google Sheets for this test - save only locally
+                    console.log('🧪 FORCED TEST - Saving locally (bypassing Google Sheets)');
                     
-                    // NO normalizar - mantener la hora original
                     setAppointments(prev => {
                         const updated = [...prev, testAppointment];
-                        console.log('🧪 Test appointment added with time:', testAppointment.time);
+                        console.log('🧪 FORCED TEST - Appointment saved locally with time:', testAppointment.time);
+                        
+                        // Verify the saved appointment
+                        const savedAppointment = updated[updated.length - 1];
+                        console.log('🧪 FORCED TEST - Saved appointment verification:', {
+                            savedTime: savedAppointment.time,
+                            typeof: typeof savedAppointment.time,
+                            stillCorrect: savedAppointment.time === fixedTime
+                        });
+                        
                         return updated;
                     });
                     
-                    alert(`Cita de prueba agregada a las ${testAppointment.time}`);
+                    alert(`TEST: Cita creada con hora FORZADA ${fixedTime}. Verifica que aparezca exactamente a esa hora.`);
                 } catch (error) {
-                    console.error('Error in test:', error);
-                    alert('Error en prueba: ' + error.message);
+                    console.error('🧪 FORCED TEST - Error:', error);
+                    alert('Error en test forzado: ' + error.message);
+                }
+            };
+
+            const testGoogleSheetsTime = async () => {
+                if (connectionStatus !== 'online') {
+                    alert('Necesitas estar conectado a Google Sheets para este test');
+                    return;
+                }
+
+                const testAppointment = {
+                    id: Date.now(),
+                    patientName: 'TEST - Google Sheets',
+                    phone: '123-456-7890',
+                    email: 'test@sheets.com',
+                    date: DateHelper.getTodayString(),
+                    time: '10:30', // Hora específica para testear Google Sheets
+                    type: 'Consulta',
+                    notes: 'Test de Google Sheets - debería mantener 10:30',
+                    status: 'Programada',
+                    doctorId: 1,
+                    clinicId: 1,
+                    createdAt: new Date().toISOString()
+                };
+
+                console.log('🧪 SHEETS TEST - Sending to Google Sheets:', testAppointment);
+
+                try {
+                    const result = await API.addAppointment(testAppointment);
+                    console.log('🧪 SHEETS TEST - Google Sheets response:', result);
+                    
+                    // Agregar localmente también
+                    setAppointments(prev => [...prev, testAppointment]);
+                    
+                    alert(`TEST: Cita enviada a Google Sheets con hora 10:30. Verifica en consola si Google Sheets devuelve la hora correcta.`);
+                } catch (error) {
+                    console.error('🧪 SHEETS TEST - Error:', error);
+                    alert('Error en test de Google Sheets: ' + error.message);
                 }
             };
 
@@ -3055,11 +3117,15 @@ const deleteAppointment = async (id) => {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Hora *
+                                                    Hora * (Formato: HH:MM)
                                                 </label>
                                                 <select
                                                     value={appointmentForm.time}
-                                                    onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                                                    onChange={(e) => {
+                                                        const selectedTime = e.target.value;
+                                                        console.log('🕐 Time selected from dropdown:', selectedTime, 'Type:', typeof selectedTime);
+                                                        setAppointmentForm({...appointmentForm, time: selectedTime});
+                                                    }}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                     disabled={loading}
                                                 >
@@ -3071,6 +3137,9 @@ const deleteAppointment = async (id) => {
                                                         <option value={appointmentForm.time}>{appointmentForm.time} (hora actual)</option>
                                                     )}
                                                 </select>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    Hora seleccionada: {appointmentForm.time} ({typeof appointmentForm.time})
+                                                </div>
                                             </div>
                                         </div>
 
