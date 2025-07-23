@@ -740,7 +740,6 @@
                 return days;
             };
 
-            // FUNCIÓN CORREGIDA: getAppointmentsForDate
             const getAppointmentsForDate = (date, doctorId = null, clinicId = null) => {
                 const dateStr = DateHelper.extractDateOnly(date);
                 const targetClinicId = clinicId || activeClinicId;
@@ -752,6 +751,14 @@
                     const matchesClinic = apt.clinicId === targetClinicId;
                     
                     return matchesDate && matchesDoctor && matchesClinic;
+                });
+
+                // >>>>> ESTA ES LA ORDENACIÓN PRINCIPAL Y ÚNICA <<<<<
+                // Asegura que las citas filtradas se ordenen por hora
+                filtered.sort((a, b) => {
+                    const timeA = DateHelper.extractTimeOnly(a.time);
+                    const timeB = DateHelper.extractTimeOnly(b.time);
+                    return timeA.localeCompare(timeB); // Compara las horas como cadenas (HH:MM)
                 });
                 
                 console.log(`📅 getAppointmentsForDate(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
@@ -767,7 +774,7 @@
                     }))
                 });
                 
-                return filtered;
+                return filtered; // Devuelve la lista ya ordenada
             };
 
             // FUNCIÓN CORREGIDA: getTodayAppointments
@@ -836,17 +843,12 @@
                 return available;
             };
 
-            const handleDayClick = (date, doctorId) => {
-                const dayAppointments = getAppointmentsForDate(date, doctorId, activeClinicId);
-                setSelectedDayDate(date);
-                setSelectedDayAppointments(dayAppointments);
-                setAppointmentForm({
-                    ...appointmentForm,
-                    date: DateHelper.getLocalDateString(date),
-                    doctorId: doctorId,
-                    clinicId: activeClinicId
-                });
-                setShowDayAppointments(true);
+            const handleDayClick = (day) => {
+                setSelectedDate(day);
+                // getAppointmentsForDate ya devuelve las citas ordenadas, no se necesita ordenar aquí de nuevo
+                const dayAppointments = getAppointmentsForDate(day, activeDoctorId, activeClinicId); 
+                setSelectedDayAppointments(dayAppointments); // Establece el estado con la lista ya ordenada
+                setShowAppointmentModal(true);
             };
 
             const isToday = (date) => {
