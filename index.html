@@ -843,12 +843,17 @@
                 return available;
             };
 
-            const handleDayClick = (day) => {
-                setSelectedDate(day);
-                // getAppointmentsForDate ya devuelve las citas ordenadas, no se necesita ordenar aquí de nuevo
-                const dayAppointments = getAppointmentsForDate(day, activeDoctorId, activeClinicId); 
-                setSelectedDayAppointments(dayAppointments); // Establece el estado con la lista ya ordenada
-                setShowAppointmentModal(true);
+            const handleDayClick = (date, doctorId) => {
+                const dayAppointments = getAppointmentsForDate(date, doctorId, activeClinicId);
+                setSelectedDayDate(date);
+                setSelectedDayAppointments(dayAppointments);
+                setAppointmentForm({
+                    ...appointmentForm,
+                    date: DateHelper.getLocalDateString(date),
+                    doctorId: doctorId,
+                    clinicId: activeClinicId
+                });
+                setShowDayAppointments(true);
             };
 
             const isToday = (date) => {
