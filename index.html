@@ -3043,54 +3043,106 @@
                                         </button>
                                     </div>
 
-                                    <div className="mt-4 space-y-3 max-h-80 overflow-y-auto pr-2">
-                                            {selectedDayAppointments.length === 0 ? (
-                                                <p className="text-gray-500">No hay citas para este día.</p>
-                                            ) : (
-                                                // APLICAR ORDENACIÓN AQUÍ
-                                                selectedDayAppointments
-                                                    .sort((a, b) => {
-                                                        const timeA = DateHelper.extractTimeOnly(a.time);
-                                                        const timeB = DateHelper.extractTimeOnly(b.time);
-                                                        return timeA.localeCompare(timeB);
-                                                    })
-                                                    .map(apt => (
-                                                        <div key={apt.id} className="bg-white p-4 rounded-lg shadow-sm flex items-start justify-between border border-gray-200">
-                                                            <div className="flex-1">
-                                                                <p className="text-sm text-gray-500">
-                                                                    <span className="font-semibold text-gray-700">Hora:</span> {DateHelper.extractTimeOnly(apt.time)}
-                                                                </p>
-                                                                <p className="font-semibold text-gray-800 mt-1">{apt.patientName}</p>
-                                                                {apt.reason && <p className="text-sm text-gray-600">Motivo: {apt.reason}</p>}
-                                                                <p className="text-xs text-gray-500 mt-1">Doctor: {getDoctorName(apt.doctorId)}</p>
-                                                            </div>
-                                                            <div className="flex-shrink-0 flex space-x-2 ml-4">
-                                                                <button
-                                                                    onClick={() => handleEditAppointment(apt)}
-                                                                    className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
-                                                                >
-                                                                    <Icons.Edit />
-                                                                    Editar
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (confirm('¿Está seguro de eliminar esta cita?')) {
-                                                                            deleteAppointment(apt.id);
-                                                                            // Actualizar el estado después de eliminar para reflejar el cambio
-                                                                            setSelectedDayAppointments(prev => prev.filter(a => a.id !== apt.id));
-                                                                        }
-                                                                    }}
-                                                                    className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
-                                                                >
-                                                                    <Icons.Trash />
-                                                                    Eliminar
-                                                                </button>
+                                    {selectedDayAppointments.length === 0 ? (
+                                        <div className="text-center py-8">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Icons.Calendar />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay citas programadas</h3>
+                                            <p className="text-gray-600 mb-4">No tienes citas programadas para este día.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {selectedDayAppointments
+                                                .sort((a, b) => a.time.localeCompare(b.time))
+                                                .map(apt => (
+                                                <div key={apt.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-gray-900 text-lg">{apt.patientName}</h4>
+                                                            <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                                                                <span className="flex items-center gap-1">
+                                                                    <Icons.Clock />
+                                                                    {DateHelper.extractTimeOnly(apt.time)}
+                                                                </span>
+                                                                <span className="flex items-center gap-1">
+                                                                    👨‍⚕️ {doctors.find(d => d.id === apt.doctorId)?.name}
+                                                                </span>
+                                                                {apt.phone && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        📞 {apt.phone}
+                                                                    </span>
+                                                                )}
+                                                                {apt.email && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        📧 {apt.email}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    ))
-                                            )}
+                                                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                                            apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
+                                                            apt.status === 'Programada' ? 'bg-blue-100 text-blue-800' :
+                                                            apt.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
+                                                            apt.status === 'Completada' ? 'bg-gray-100 text-gray-800' :
+                                                            'bg-red-100 text-red-800'
+                                                        }`}>
+                                                            {apt.status}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="mb-3">
+                                                        <span className="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-sm font-medium">
+                                                            {apt.type}
+                                                        </span>
+                                                    </div>
+
+                                                    {apt.notes && (
+                                                        <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                                                            <p className="text-sm text-gray-700">{apt.notes}</p>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingAppointment(apt);
+                                                                setAppointmentForm({
+                                                                    patientName: apt.patientName,
+                                                                    phone: apt.phone || '',
+                                                                    email: apt.email || '',
+                                                                    date: DateHelper.extractDateOnly(apt.date),
+                                                                    time: DateHelper.extractTimeOnly(apt.time),
+                                                                    type: apt.type,
+                                                                    notes: apt.notes || '',
+                                                                    status: apt.status,
+                                                                    doctorId: apt.doctorId,
+                                                                    clinicId: apt.clinicId
+                                                                });
+                                                                setShowDayAppointments(false);
+                                                            }}
+                                                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
+                                                        >
+                                                            <Icons.Edit />
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('¿Está seguro de eliminar esta cita?')) {
+                                                                    deleteAppointment(apt.id);
+                                                                    setSelectedDayAppointments(prev => prev.filter(a => a.id !== apt.id));
+                                                                }
+                                                            }}
+                                                            className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
+                                                        >
+                                                            <Icons.Trash />
+                                                            Eliminar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
-                                    )
+                                    )}
                                 </div>
                             </div>
                         </div>
