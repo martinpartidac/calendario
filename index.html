@@ -98,7 +98,6 @@
 
         // HELPER FUNCTIONS PARA FECHAS
         const DateHelper = {
-            // Obtener fecha en formato local YYYY-MM-DD
             getLocalDateString: (date = new Date()) => {
                 const d = new Date(date);
                 const year = d.getFullYear();
@@ -107,31 +106,25 @@
                 return `${year}-${month}-${day}`;
             },
 
-            // Obtener fecha de hoy en formato local
             getTodayString: () => {
                 return DateHelper.getLocalDateString(new Date());
             },
 
-            // Extraer solo la fecha de un string ISO o fecha completa
             extractDateOnly: (dateString) => {
                 if (!dateString) return '';
                 
-                // Si es un string ISO como "2025-07-15T06:00:00.000Z"
                 if (typeof dateString === 'string' && dateString.includes('T')) {
                     return dateString.split('T')[0];
                 }
                 
-                // Si es un string de fecha como "2025-07-15"
                 if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
                     return dateString;
                 }
                 
-                // Si es un objeto Date
                 if (dateString instanceof Date) {
                     return DateHelper.getLocalDateString(dateString);
                 }
                 
-                // Si es otro formato, intenta convertirlo
                 try {
                     return DateHelper.getLocalDateString(new Date(dateString));
                 } catch (e) {
@@ -140,46 +133,40 @@
                 }
             },
 
-            // Extraer solo la hora de un string de tiempo o fecha completa
             extractTimeOnly: (timeString) => {
-    if (!timeString) return '';
+                if (!timeString) return '';
 
-    // Si ya es formato HH:MM, retorna como está
-    if (typeof timeString === 'string' && timeString.match(/^\d{1,2}:\d{2}$/)) {
-        return timeString;
-    }
-    
-    let date;
-    // Si es una cadena ISO completa como "1899-12-30T22:11:16.000Z"
-    if (typeof timeString === 'string' && timeString.includes('T')) {
-        date = new Date(timeString); // Esto lo analiza en la hora local
-    } else {
-        // Intenta analizar otros formatos, o si ya es un objeto Date
-        try {
-            date = new Date(timeString);
-        } catch (e) {
-            console.warn('Could not parse time:', timeString);
-            return timeString.toString(); // Retorna el original si el análisis falla
-        }
-    }
+                if (typeof timeString === 'string' && timeString.match(/^\d{1,2}:\d{2}$/)) {
+                    return timeString;
+                }
+                
+                let date;
+                if (typeof timeString === 'string' && timeString.includes('T')) {
+                    date = new Date(timeString);
+                } else {
+                    try {
+                        date = new Date(timeString);
+                    } catch (e) {
+                        console.warn('Could not parse time:', timeString);
+                        return timeString.toString();
+                    }
+                }
 
-    if (!isNaN(date.getTime())) {
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        return `${hours}:${minutes}`;
-    }
-    
-    return timeString.toString(); // Fallback
-},
+                if (!isNaN(date.getTime())) {
+                    const hours = date.getHours().toString().padStart(2, '0');
+                    const minutes = date.getMinutes().toString().padStart(2, '0');
+                    return `${hours}:${minutes}`;
+                }
+                
+                return timeString.toString();
+            },
 
-            // Comparar si dos fechas son iguales (solo fecha, no hora)
             areSameDate: (date1, date2) => {
                 const d1 = DateHelper.extractDateOnly(date1);
                 const d2 = DateHelper.extractDateOnly(date2);
                 return d1 === d2;
             },
 
-            // Crear Date object desde string YYYY-MM-DD
             dateFromString: (dateString) => {
                 const [year, month, day] = dateString.split('-').map(Number);
                 return new Date(year, month - 1, day);
@@ -188,7 +175,6 @@
 
         // HELPER FUNCTIONS PARA TIPOS DE DATOS
         const DataHelper = {
-            // Asegurar que ID sea número
             ensureNumber: (value) => {
                 if (typeof value === 'string' && value !== '') {
                     const num = parseInt(value, 10);
@@ -197,15 +183,14 @@
                 return typeof value === 'number' ? value : value;
             },
 
-            // Normalizar appointment data
             normalizeAppointment: (apt) => {
                 return {
                     ...apt,
                     id: DataHelper.ensureNumber(apt.id),
                     doctorId: DataHelper.ensureNumber(apt.doctorId) || 1,
                     clinicId: DataHelper.ensureNumber(apt.clinicId) || 1,
-                    date: DateHelper.extractDateOnly(apt.date), // Extraer solo la fecha
-                    time: DateHelper.extractTimeOnly(apt.time)   // Extraer solo la hora
+                    date: DateHelper.extractDateOnly(apt.date),
+                    time: DateHelper.extractTimeOnly(apt.time)
                 };
             }
         };
@@ -316,6 +301,11 @@
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m7-7H5" />
                 </svg>
+            ),
+            FileText: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
             )
         };
 
@@ -329,7 +319,7 @@
                     formData.append('action', action);
                     
                     if (data && Object.keys(data).length > 0) {
-                        if (action === 'deleteMedication' || action === 'deleteAppointment') {
+                        if (action === 'deleteMedication' || action === 'deleteAppointment' || action === 'deletePatient' || action === 'deleteMedicalRecord') {
                             formData.append('id', data.toString());
                         } else {
                             formData.append('data', JSON.stringify(data));
@@ -376,10 +366,7 @@
             },
 
             async deleteMedication(id) {
-                console.log('API: Deleting medication with ID:', id);
-                const result = await this.call('deleteMedication', id);
-                console.log('API: Delete result:', result);
-                return result;
+                return await this.call('deleteMedication', id);
             },
 
             async getSales() {
@@ -398,24 +385,53 @@
             },
 
             async addAppointment(appointment) {
-                console.log('📅 Adding appointment:', appointment);
-                const result = await this.call('addAppointment', appointment);
-                console.log('📅 Add appointment result:', result);
-                return result;
+                return await this.call('addAppointment', appointment);
             },
 
             async updateAppointment(appointment) {
-                console.log('📅 Updating appointment:', appointment);
-                const result = await this.call('updateAppointment', appointment);
-                console.log('📅 Update appointment result:', result);
-                return result;
+                return await this.call('updateAppointment', appointment);
             },
 
             async deleteAppointment(id) {
-                console.log('📅 Deleting appointment with ID:', id);
-                const result = await this.call('deleteAppointment', id);
-                console.log('📅 Delete appointment result:', result);
+                return await this.call('deleteAppointment', id);
+            },
+
+            // Funciones para pacientes
+            async getPatients() {
+                const result = await this.call('getPatients');
+                console.log('👥 Patients loaded from API:', result);
                 return result;
+            },
+
+            async addPatient(patient) {
+                return await this.call('addPatient', patient);
+            },
+
+            async updatePatient(patient) {
+                return await this.call('updatePatient', patient);
+            },
+
+            async deletePatient(id) {
+                return await this.call('deletePatient', id);
+            },
+
+            // Funciones para consultas médicas
+            async getMedicalRecords() {
+                const result = await this.call('getMedicalRecords');
+                console.log('🏥 Medical records loaded from API:', result);
+                return result;
+            },
+
+            async addMedicalRecord(record) {
+                return await this.call('addMedicalRecord', record);
+            },
+
+            async updateMedicalRecord(record) {
+                return await this.call('updateMedicalRecord', record);
+            },
+
+            async deleteMedicalRecord(id) {
+                return await this.call('deleteMedicalRecord', id);
             }
         };
 
@@ -428,6 +444,8 @@
             const [cart, setCart] = useState([]);
             const [salesHistory, setSalesHistory] = useState([]);
             const [appointments, setAppointments] = useState([]);
+            const [patients, setPatients] = useState([]);
+            const [medicalRecords, setMedicalRecords] = useState([]);
             const [showAddForm, setShowAddForm] = useState(false);
             const [editingMed, setEditingMed] = useState(null);
             const [showAddStock, setShowAddStock] = useState(null);
@@ -444,6 +462,15 @@
             const [connectionStatus, setConnectionStatus] = useState('checking');
             const [lastSync, setLastSync] = useState(null);
             const [debugMode, setDebugMode] = useState(false);
+
+            // Estados para historiales clínicos
+            const [showPatientForm, setShowPatientForm] = useState(false);
+            const [editingPatient, setEditingPatient] = useState(null);
+            const [selectedPatient, setSelectedPatient] = useState(null);
+            const [showConsultationForm, setShowConsultationForm] = useState(false);
+            const [editingConsultation, setEditingConsultation] = useState(null);
+            const [patientSearchTerm, setPatientSearchTerm] = useState('');
+            const [selectedPatientForConsultation, setSelectedPatientForConsultation] = useState(null);
 
             // Estados del formulario
             const [formData, setFormData] = useState({
@@ -478,6 +505,46 @@
                 clinicId: 1
             });
 
+            // Estados del formulario de pacientes
+            const [patientForm, setPatientForm] = useState({
+                firstName: '',
+                lastName: '',
+                dateOfBirth: '',
+                gender: 'Masculino',
+                phone: '',
+                email: '',
+                address: '',
+                emergencyContact: '',
+                emergencyPhone: '',
+                bloodType: '',
+                allergies: '',
+                chronicConditions: '',
+                clinicId: 1
+            });
+
+            // Estados del formulario de consultas
+            const [consultationForm, setConsultationForm] = useState({
+                patientId: '',
+                doctorId: 1,
+                clinicId: 1,
+                date: '',
+                reason: '',
+                symptoms: '',
+                diagnosis: '',
+                treatment: '',
+                prescriptions: [],
+                vitalSigns: {
+                    bloodPressure: '',
+                    temperature: '',
+                    weight: '',
+                    height: '',
+                    heartRate: ''
+                },
+                notes: '',
+                followUpDate: '',
+                status: 'Completada'
+            });
+
             const presentations = [
                 'Tabletas', 'Cápsulas', 'Jarabe', 'Inyección', 
                 'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel'
@@ -503,35 +570,15 @@
                 'Programada', 'Confirmada', 'En progreso', 'Completada', 'Cancelada', 'No asistió'
             ];
 
-            // Debug info
-            const debugInfo = useMemo(() => {
-                const todayStr = DateHelper.getTodayString();
-                const todayAppointments = appointments.filter(apt => {
-                    const aptDateStr = DateHelper.extractDateOnly(apt.date);
-                    return aptDateStr === todayStr && apt.clinicId === activeClinicId;
-                });
-                
-                return {
-                    appointments: appointments.length,
-                    activeClinicId,
-                    activeDoctorId,
-                    activeTab,
-                    currentMonth: currentMonth.toLocaleDateString(),
-                    appointmentsForActiveClinic: appointments.filter(apt => apt.clinicId === activeClinicId).length,
-                    appointmentsForActiveDoctor: appointments.filter(apt => apt.doctorId === activeDoctorId && apt.clinicId === activeClinicId).length,
-                    todayAppointments: todayAppointments.length,
-                    todayDate: todayStr,
-                    sampleAppointments: appointments.slice(0, 3).map(apt => ({
-                        id: apt.id,
-                        originalDate: apt.date,
-                        extractedDate: DateHelper.extractDateOnly(apt.date),
-                        patientName: apt.patientName,
-                        doctorId: apt.doctorId,
-                        clinicId: apt.clinicId,
-                        time: apt.time
-                    }))
-                };
-            }, [appointments, activeClinicId, activeDoctorId, activeTab, currentMonth]);
+            const genders = ['Masculino', 'Femenino', 'Otro'];
+            
+            const bloodTypes = [
+                'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Desconocido'
+            ];
+
+            const consultationStatuses = [
+                'Completada', 'En progreso', 'Pendiente seguimiento', 'Cancelada'
+            ];
 
             // Verificar conexión y cargar datos
             useEffect(() => {
@@ -550,20 +597,26 @@
                     console.log('🔗 Connection test:', testResult);
                     
                     // Load data
-                    const [medsResult, salesResult, appointmentsResult] = await Promise.all([
+                    const [medsResult, salesResult, appointmentsResult, patientsResult, recordsResult] = await Promise.all([
                         API.getMedications(),
                         API.getSales(),
-                        API.getAppointments()
+                        API.getAppointments(),
+                        API.getPatients(),
+                        API.getMedicalRecords()
                     ]);
 
                     console.log('📊 Data loaded:', {
                         medications: medsResult.data?.length || 0,
                         sales: salesResult.data?.length || 0,
-                        appointments: appointmentsResult.data?.length || 0
+                        appointments: appointmentsResult.data?.length || 0,
+                        patients: patientsResult.data?.length || 0,
+                        medicalRecords: recordsResult.data?.length || 0
                     });
 
                     setMedications(medsResult.data || []);
                     setSalesHistory(salesResult.data || []);
+                    setPatients(patientsResult.data || []);
+                    setMedicalRecords(recordsResult.data || []);
                     
                     // Procesar citas con normalización de datos
                     const rawAppointments = appointmentsResult.data || [];
@@ -573,7 +626,6 @@
                         return normalized;
                     });
                     
-                    console.log('📅 Final processed appointments:', processedAppointments);
                     setAppointments(processedAppointments);
                     
                     setConnectionStatus('online');
@@ -587,13 +639,16 @@
                     const savedMeds = localStorage.getItem('pharmacy_medications');
                     const savedSales = localStorage.getItem('pharmacy_sales');
                     const savedAppointments = localStorage.getItem('pharmacy_appointments');
+                    const savedPatients = localStorage.getItem('pharmacy_patients');
+                    const savedRecords = localStorage.getItem('pharmacy_medical_records');
                     
                     if (savedMeds) setMedications(JSON.parse(savedMeds));
                     if (savedSales) setSalesHistory(JSON.parse(savedSales));
+                    if (savedPatients) setPatients(JSON.parse(savedPatients));
+                    if (savedRecords) setMedicalRecords(JSON.parse(savedRecords));
                     if (savedAppointments) {
                         const localAppointments = JSON.parse(savedAppointments);
                         const processedLocal = localAppointments.map(apt => DataHelper.normalizeAppointment(apt));
-                        console.log('📅 Loaded appointments from localStorage:', processedLocal);
                         setAppointments(processedLocal);
                     }
                 } finally {
@@ -614,34 +669,22 @@
                 localStorage.setItem('pharmacy_appointments', JSON.stringify(appointments));
             }, [appointments]);
 
-            // Debug log cuando cambian los appointments
             useEffect(() => {
-                console.log('📅 Appointments state changed:', {
-                    total: appointments.length,
-                    sample: appointments.slice(0, 3),
-                    activeClinicId,
-                    activeDoctorId,
-                    todayStr: DateHelper.getTodayString()
-                });
-            }, [appointments, activeClinicId, activeDoctorId]);
+                localStorage.setItem('pharmacy_patients', JSON.stringify(patients));
+            }, [patients]);
 
-            // Limpiar la hora seleccionada cuando cambie la fecha o el médico
             useEffect(() => {
-                if (appointmentForm.date && appointmentForm.doctorId) {
-                    const availableSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
-                    if (appointmentForm.time && !availableSlots.includes(appointmentForm.time) && !editingAppointment) {
-                        setAppointmentForm(prev => ({...prev, time: ''}));
-                    }
-                }
-            }, [appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId, appointments, editingAppointment]);
+                localStorage.setItem('pharmacy_medical_records', JSON.stringify(medicalRecords));
+            }, [medicalRecords]);
 
             // Actualizar formularios cuando cambie la clínica activa
             useEffect(() => {
                 setFormData(prev => ({...prev, clinicId: activeClinicId}));
                 setAppointmentForm(prev => ({...prev, clinicId: activeClinicId}));
+                setPatientForm(prev => ({...prev, clinicId: activeClinicId}));
+                setConsultationForm(prev => ({...prev, clinicId: activeClinicId}));
             }, [activeClinicId]);
 
-            // Búsqueda inteligente filtrada por clínica
             // Búsqueda inteligente filtrada por clínica
             const filteredMedications = useMemo(() => {
                 const clinicMedications = medications.filter(med => med.clinicId === activeClinicId);
@@ -663,7 +706,6 @@
                     });
                 }
 
-                // Ordenar alfabéticamente por nombre
                 results.sort((a, b) => {
                     const nameA = a.name ? a.name.toLowerCase() : '';
                     const nameB = b.name ? b.name.toLowerCase() : '';
@@ -673,7 +715,47 @@
                 return results;
             }, [medications, searchTerm, activeClinicId]);
 
-            
+            // Búsqueda de pacientes filtrada por clínica
+            const filteredPatients = useMemo(() => {
+                const clinicPatients = patients.filter(patient => patient.clinicId === activeClinicId);
+                
+                let results = clinicPatients;
+
+                if (patientSearchTerm) {
+                    const term = patientSearchTerm.toLowerCase();
+                    results = clinicPatients.filter(patient => {
+                        const searchFields = [
+                            patient.firstName || '',
+                            patient.lastName || '',
+                            patient.phone || '',
+                            patient.email || ''
+                        ].join(' ').toLowerCase();
+                        
+                        return searchFields.includes(term);
+                    });
+                }
+
+                results.sort((a, b) => {
+                    const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+                    const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+                    return nameA.localeCompare(nameB);
+                });
+
+                return results;
+            }, [patients, patientSearchTerm, activeClinicId]);
+
+            // Obtener registros médicos de un paciente
+            const getPatientMedicalRecords = (patientId) => {
+                return medicalRecords
+                    .filter(record => record.patientId === patientId)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+            };
+
+            // Obtener último registro médico de un paciente
+            const getLastMedicalRecord = (patientId) => {
+                const records = getPatientMedicalRecords(patientId);
+                return records.length > 0 ? records[0] : null;
+            };
 
             // Medicamentos con stock bajo filtrados por clínica
             const lowStockMeds = medications.filter(med => med.quantity <= med.minStock && med.clinicId === activeClinicId);
@@ -700,7 +782,7 @@
                     .slice(0, 5);
             }, [medications, salesHistory, activeClinicId]);
 
-            // Funciones de calendario CORREGIDAS
+            // Funciones de calendario
             const getDaysInMonth = (date) => {
                 const year = date.getFullYear();
                 const month = date.getMonth();
@@ -711,7 +793,6 @@
                 
                 const days = [];
                 
-                // Días del mes anterior
                 const prevMonth = new Date(year, month - 1, 0);
                 for (let i = startingDayOfWeek - 1; i >= 0; i--) {
                     days.push({
@@ -720,7 +801,6 @@
                     });
                 }
                 
-                // Días del mes actual
                 for (let day = 1; day <= daysInMonth; day++) {
                     days.push({
                         date: new Date(year, month, day),
@@ -728,7 +808,6 @@
                     });
                 }
                 
-                // Días del próximo mes
                 const remainingDays = 42 - days.length;
                 for (let day = 1; day <= remainingDays; day++) {
                     days.push({
@@ -753,31 +832,15 @@
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
 
-                // >>>>> ESTA ES LA ORDENACIÓN PRINCIPAL Y ÚNICA <<<<<
-                // Asegura que las citas filtradas se ordenen por hora
                 filtered.sort((a, b) => {
                     const timeA = DateHelper.extractTimeOnly(a.time);
                     const timeB = DateHelper.extractTimeOnly(b.time);
-                    return timeA.localeCompare(timeB); // Compara las horas como cadenas (HH:MM)
+                    return timeA.localeCompare(timeB);
                 });
                 
-                console.log(`📅 getAppointmentsForDate(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
-                    found: filtered.length,
-                    totalAppointments: appointments.length,
-                    searchDate: dateStr,
-                    sampleMatches: filtered.slice(0, 2).map(apt => ({
-                        id: apt.id,
-                        patientName: apt.patientName,
-                        originalDate: apt.date,
-                        extractedDate: DateHelper.extractDateOnly(apt.date),
-                        time: apt.time
-                    }))
-                });
-                
-                return filtered; // Devuelve la lista ya ordenada
+                return filtered;
             };
 
-            // FUNCIÓN CORREGIDA: getTodayAppointments
             const getTodayAppointments = (doctorId = null, clinicId = null) => {
                 const todayStr = DateHelper.getTodayString();
                 const targetClinicId = clinicId || activeClinicId;
@@ -791,31 +854,15 @@
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
 
-                // Añadir ordenación por hora
                 filtered.sort((a, b) => {
                     const timeA = DateHelper.extractTimeOnly(a.time);
                     const timeB = DateHelper.extractTimeOnly(b.time);
                     return timeA.localeCompare(timeB);
                 });
                 
-                console.log(`📅 getTodayAppointments(doctor:${doctorId}, clinic:${targetClinicId}):`, {
-                    found: filtered.length,
-                    todayStr,
-                    totalAppointments: appointments.length,
-                    searchDate: todayStr,
-                    sampleMatches: filtered.slice(0, 2).map(apt => ({
-                        id: apt.id,
-                        patientName: apt.patientName,
-                        originalDate: apt.date,
-                        extractedDate: DateHelper.extractDateOnly(apt.date),
-                        time: apt.time
-                    }))
-                });
-                
                 return filtered;
             };
 
-            // FUNCIÓN CORREGIDA: getAvailableTimeSlots
             const getAvailableTimeSlots = (selectedDate, doctorId, clinicId = null) => {
                 if (!selectedDate || !doctorId) return timeSlots;
                 
@@ -831,14 +878,6 @@
                 
                 const bookedTimes = dayAppointments.map(apt => DateHelper.extractTimeOnly(apt.time));
                 const available = timeSlots.filter(time => !bookedTimes.includes(time));
-                
-                console.log(`📅 getAvailableTimeSlots(${dateStr}, doctor:${doctorId}, clinic:${targetClinicId}):`, {
-                    total: timeSlots.length,
-                    booked: bookedTimes.length,
-                    available: available.length,
-                    bookedTimes,
-                    dayAppointments: dayAppointments.length
-                });
                 
                 return available;
             };
@@ -862,7 +901,6 @@
                 return dateStr === todayStr;
             };
 
-            // Generar horas disponibles
             const generateTimeSlots = () => {
                 const slots = [];
                 for (let hour = 8; hour <= 17; hour++) {
@@ -877,7 +915,7 @@
             const timeSlots = generateTimeSlots();
             const availableTimeSlots = getAvailableTimeSlots(appointmentForm.date, appointmentForm.doctorId, appointmentForm.clinicId);
 
-            // Funciones CRUD para medicamentos (mantener las existentes)
+            // Funciones CRUD para medicamentos
             const addMedication = async () => {
                 if (!formData.name || !formData.unitPrice || !formData.publicPrice || !formData.quantity) {
                     alert('Por favor complete todos los campos obligatorios (nombre, precios y cantidad)');
@@ -1026,17 +1064,229 @@
                 }
             };
 
-            // Funciones CRUD para citas CORREGIDAS
+            // Funciones CRUD para pacientes
+            const addPatient = async () => {
+                if (!patientForm.firstName || !patientForm.lastName) {
+                    alert('Por favor complete los campos obligatorios (nombres y apellidos)');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+                    
+                    const newPatient = {
+                        id: Date.now(),
+                        firstName: patientForm.firstName,
+                        lastName: patientForm.lastName,
+                        dateOfBirth: patientForm.dateOfBirth,
+                        gender: patientForm.gender,
+                        phone: patientForm.phone,
+                        email: patientForm.email,
+                        address: patientForm.address,
+                        emergencyContact: patientForm.emergencyContact,
+                        emergencyPhone: patientForm.emergencyPhone,
+                        bloodType: patientForm.bloodType,
+                        allergies: patientForm.allergies,
+                        chronicConditions: patientForm.chronicConditions,
+                        clinicId: activeClinicId,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.addPatient(newPatient);
+                        setLastSync(new Date());
+                    }
+
+                    setPatients(prev => [...prev, newPatient]);
+                    resetPatientForm();
+                    setShowPatientForm(false);
+                    alert('Paciente registrado exitosamente');
+
+                } catch (error) {
+                    console.error('Error adding patient:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updatePatient = async () => {
+                if (!patientForm.firstName || !patientForm.lastName) {
+                    alert('Por favor complete los campos obligatorios');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+
+                    const updatedPatient = {
+                        ...editingPatient,
+                        firstName: patientForm.firstName,
+                        lastName: patientForm.lastName,
+                        dateOfBirth: patientForm.dateOfBirth,
+                        gender: patientForm.gender,
+                        phone: patientForm.phone,
+                        email: patientForm.email,
+                        address: patientForm.address,
+                        emergencyContact: patientForm.emergencyContact,
+                        emergencyPhone: patientForm.emergencyPhone,
+                        bloodType: patientForm.bloodType,
+                        allergies: patientForm.allergies,
+                        chronicConditions: patientForm.chronicConditions
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.updatePatient(updatedPatient);
+                        setLastSync(new Date());
+                    }
+                    
+                    setPatients(prev => prev.map(patient => 
+                        patient.id === editingPatient.id ? updatedPatient : patient
+                    ));
+                    
+                    if (selectedPatient && selectedPatient.id === editingPatient.id) {
+                        setSelectedPatient(updatedPatient);
+                    }
+                    
+                    resetPatientForm();
+                    setEditingPatient(null);
+                    alert('Paciente actualizado exitosamente');
+
+                } catch (error) {
+                    console.error('Error updating patient:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Funciones CRUD para consultas médicas
+            const addMedicalRecord = async () => {
+                if (!consultationForm.patientId || !consultationForm.reason || !consultationForm.date) {
+                    alert('Por favor complete los campos obligatorios (paciente, motivo y fecha)');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+                    
+                    const newRecord = {
+                        id: Date.now(),
+                        patientId: consultationForm.patientId,
+                        doctorId: consultationForm.doctorId,
+                        clinicId: consultationForm.clinicId,
+                        date: consultationForm.date,
+                        reason: consultationForm.reason,
+                        symptoms: consultationForm.symptoms,
+                        diagnosis: consultationForm.diagnosis,
+                        treatment: consultationForm.treatment,
+                        prescriptions: consultationForm.prescriptions,
+                        vitalSigns: consultationForm.vitalSigns,
+                        notes: consultationForm.notes,
+                        followUpDate: consultationForm.followUpDate,
+                        status: consultationForm.status,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.addMedicalRecord(newRecord);
+                        setLastSync(new Date());
+                    }
+
+                    setMedicalRecords(prev => [...prev, newRecord]);
+                    resetConsultationForm();
+                    setShowConsultationForm(false);
+                    setSelectedPatientForConsultation(null);
+                    alert('Consulta médica registrada exitosamente');
+
+                    if (consultationForm.followUpDate) {
+                        const shouldCreateAppointment = confirm('¿Desea crear una cita para la fecha de seguimiento?');
+                        if (shouldCreateAppointment && selectedPatientForConsultation) {
+                            setAppointmentForm({
+                                patientName: `${selectedPatientForConsultation.firstName} ${selectedPatientForConsultation.lastName}`,
+                                phone: selectedPatientForConsultation.phone || '',
+                                email: selectedPatientForConsultation.email || '',
+                                date: consultationForm.followUpDate,
+                                time: '',
+                                type: 'Seguimiento',
+                                notes: 'Cita de seguimiento creada automáticamente',
+                                status: 'Programada',
+                                doctorId: consultationForm.doctorId,
+                                clinicId: consultationForm.clinicId
+                            });
+                            setShowAppointmentForm(true);
+                        }
+                    }
+
+                } catch (error) {
+                    console.error('Error adding medical record:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updateMedicalRecord = async () => {
+                if (!consultationForm.reason || !consultationForm.date) {
+                    alert('Por favor complete los campos obligatorios');
+                    return;
+                }
+
+                try {
+                    setLoading(true);
+
+                    const updatedRecord = {
+                        ...editingConsultation,
+                        patientId: consultationForm.patientId,
+                        doctorId: consultationForm.doctorId,
+                        clinicId: consultationForm.clinicId,
+                        date: consultationForm.date,
+                        reason: consultationForm.reason,
+                        symptoms: consultationForm.symptoms,
+                        diagnosis: consultationForm.diagnosis,
+                        treatment: consultationForm.treatment,
+                        prescriptions: consultationForm.prescriptions,
+                        vitalSigns: consultationForm.vitalSigns,
+                        notes: consultationForm.notes,
+                        followUpDate: consultationForm.followUpDate,
+                        status: consultationForm.status
+                    };
+
+                    if (connectionStatus === 'online') {
+                        await API.updateMedicalRecord(updatedRecord);
+                        setLastSync(new Date());
+                    }
+                    
+                    setMedicalRecords(prev => prev.map(record => 
+                        record.id === editingConsultation.id ? updatedRecord : record
+                    ));
+                    
+                    resetConsultationForm();
+                    setEditingConsultation(null);
+                    setSelectedPatientForConsultation(null);
+                    alert('Consulta médica actualizada exitosamente');
+
+                } catch (error) {
+                    console.error('Error updating medical record:', error);
+                    setConnectionStatus('error');
+                    alert('Error al sincronizar con Google Sheets, pero se guardó localmente');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Funciones CRUD para citas
             const addAppointment = async () => {
                 if (!appointmentForm.patientName || !appointmentForm.date || !appointmentForm.time || !appointmentForm.doctorId) {
                     alert('Por favor complete todos los campos obligatorios (nombre, fecha, hora y médico)');
                     return;
                 }
 
-                // Normalizar la hora para comparación
                 const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
 
-                // Verificar disponibilidad
                 const existingAppointment = appointments.find(apt => 
                     DateHelper.extractDateOnly(apt.date) === appointmentForm.date && 
                     DateHelper.extractTimeOnly(apt.time) === normalizedTime &&
@@ -1061,7 +1311,7 @@
                         phone: appointmentForm.phone,
                         email: appointmentForm.email,
                         date: appointmentForm.date,
-                        time: normalizedTime, // Guardar hora normalizada
+                        time: normalizedTime,
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
@@ -1070,19 +1320,13 @@
                         createdAt: new Date().toISOString()
                     };
 
-                    console.log('📅 Adding new appointment:', newAppointment);
-
                     if (connectionStatus === 'online') {
                         await API.addAppointment(newAppointment);
                         setLastSync(new Date());
                     }
 
                     const normalizedAppointment = DataHelper.normalizeAppointment(newAppointment);
-                    setAppointments(prev => {
-                        const updated = [...prev, normalizedAppointment];
-                        console.log('📅 Appointments updated, total:', updated.length);
-                        return updated;
-                    });
+                    setAppointments(prev => [...prev, normalizedAppointment]);
                     
                     resetAppointmentForm();
                     setShowAppointmentForm(false);
@@ -1103,10 +1347,8 @@
                     return;
                 }
 
-                // Normalizar la hora para comparación
                 const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
 
-                // Verificar disponibilidad
                 const existingAppointment = appointments.find(apt => 
                     DateHelper.extractDateOnly(apt.date) === appointmentForm.date && 
                     DateHelper.extractTimeOnly(apt.time) === normalizedTime &&
@@ -1131,15 +1373,13 @@
                         phone: appointmentForm.phone,
                         email: appointmentForm.email,
                         date: appointmentForm.date,
-                        time: normalizedTime, // Guardar hora normalizada
+                        time: normalizedTime,
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
                         doctorId: appointmentForm.doctorId,
                         clinicId: appointmentForm.clinicId
                     };
-
-                    console.log('📅 Updating appointment:', updatedAppointment);
 
                     if (connectionStatus === 'online') {
                         await API.updateAppointment(updatedAppointment);
@@ -1175,12 +1415,7 @@
                         setLastSync(new Date());
                     }
 
-                    setAppointments(prev => {
-                        const updated = prev.filter(apt => apt.id !== id);
-                        console.log('📅 Appointment deleted, remaining:', updated.length);
-                        return updated;
-                    });
-                    
+                    setAppointments(prev => prev.filter(apt => apt.id !== id));
                     alert('Cita eliminada exitosamente');
 
                 } catch (error) {
@@ -1194,7 +1429,7 @@
                 }
             };
 
-            // Funciones del carrito (mantener las existentes)
+            // Funciones del carrito
             const addToCart = (med) => {
                 if (med.quantity <= 0) {
                     alert('No hay stock disponible para este medicamento');
@@ -1240,7 +1475,6 @@
                     return;
                 }
 
-                // Verificar stock disponible
                 for (const cartItem of cart) {
                     const med = medications.find(m => m.id === cartItem.id);
                     if (cartItem.quantity > med.quantity) {
@@ -1252,7 +1486,6 @@
                 try {
                     setLoading(true);
 
-                    // Crear la venta
                     const sale = {
                         id: Date.now(),
                         items: cart.map(item => ({
@@ -1268,7 +1501,6 @@
                         clinicId: activeClinicId
                     };
 
-                    // Actualizar stock
                     const updatedMeds = medications.map(med => {
                         const cartItem = cart.find(item => item.id === med.id);
                         if (cartItem) {
@@ -1281,13 +1513,11 @@
                     });
 
                     if (connectionStatus === 'online') {
-                        // Actualizar medicamentos en Google Sheets
                         for (const cartItem of cart) {
                             const updatedMed = updatedMeds.find(med => med.id === cartItem.id);
                             await API.updateMedication(updatedMed);
                         }
                         
-                        // Guardar venta en Google Sheets
                         await API.addSale(sale);
                         setLastSync(new Date());
                     }
@@ -1306,49 +1536,18 @@
                 }
             };
 
-            // Test functions
-            const testAddAppointment = async () => {
-                const testAppointment = {
-                    id: Date.now(),
-                    patientName: 'Paciente Test',
-                    phone: '123-456-7890',
-                    email: 'test@test.com',
-                    date: DateHelper.getTodayString(),
-                    time: '09:00',
-                    type: 'Consulta',
-                    notes: 'Cita de prueba',
-                    status: 'Programada',
-                    doctorId: 1,
-                    clinicId: 1,
-                    createdAt: new Date().toISOString()
-                };
-
-                console.log('🧪 Testing add appointment:', testAppointment);
-
-                try {
-                    if (connectionStatus === 'online') {
-                        await API.addAppointment(testAppointment);
-                    }
-                    const normalizedAppointment = DataHelper.normalizeAppointment(testAppointment);
-                    setAppointments(prev => [...prev, normalizedAppointment]);
-                    alert('Cita de prueba agregada');
-                } catch (error) {
-                    console.error('Error in test:', error);
-                    alert('Error en prueba');
-                }
-            };
-
-            // Backup manual
             const backupData = () => {
                 const data = {
                     medications,
                     salesHistory,
                     appointments,
+                    patients,
+                    medicalRecords,
                     clinics,
                     doctors,
                     activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '3.1'
+                    version: '4.0'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -1413,9 +1612,52 @@
                 });
             };
 
+            const resetPatientForm = () => {
+                setPatientForm({
+                    firstName: '',
+                    lastName: '',
+                    dateOfBirth: '',
+                    gender: 'Masculino',
+                    phone: '',
+                    email: '',
+                    address: '',
+                    emergencyContact: '',
+                    emergencyPhone: '',
+                    bloodType: '',
+                    allergies: '',
+                    chronicConditions: '',
+                    clinicId: activeClinicId
+                });
+            };
+
+            const resetConsultationForm = () => {
+                setConsultationForm({
+                    patientId: '',
+                    doctorId: activeDoctorId,
+                    clinicId: activeClinicId,
+                    date: DateHelper.getTodayString(),
+                    reason: '',
+                    symptoms: '',
+                    diagnosis: '',
+                    treatment: '',
+                    prescriptions: [],
+                    vitalSigns: {
+                        bloodPressure: '',
+                        temperature: '',
+                        weight: '',
+                        height: '',
+                        heartRate: ''
+                    },
+                    notes: '',
+                    followUpDate: '',
+                    status: 'Completada'
+                });
+            };
+
             // Calculados del dashboard
             const totalProducts = medications.filter(med => med.clinicId === activeClinicId).length;
             const totalStock = medications.filter(med => med.clinicId === activeClinicId).reduce((sum, med) => sum + med.quantity, 0);
+            const totalPatients = patients.filter(patient => patient.clinicId === activeClinicId).length;
             const todaySales = salesHistory.filter(sale => {
                 const saleDate = DateHelper.extractDateOnly(sale.date);
                 const today = DateHelper.getTodayString();
@@ -1465,56 +1707,8 @@
                 );
             };
 
-            // Debug Panel
-            const DebugPanel = () => {
-                if (!debugMode) return null;
-
-                return (
-                    <div className="debug-panel">
-                        <div className="mb-2 font-bold">🔍 Debug Info FIXED</div>
-                        <div>Total appointments: {debugInfo.appointments}</div>
-                        <div>Active clinic: {debugInfo.activeClinicId}</div>
-                        <div>Active doctor: {debugInfo.activeDoctorId}</div>
-                        <div>Today date: {debugInfo.todayDate}</div>
-                        <div>Clinic appointments: {debugInfo.appointmentsForActiveClinic}</div>
-                        <div>Doctor appointments: {debugInfo.appointmentsForActiveDoctor}</div>
-                        <div>Today appointments: {debugInfo.todayAppointments}</div>
-                        <div className="mt-2 text-xs overflow-auto max-h-32">
-                            <div>Sample appointments:</div>
-                            {debugInfo.sampleAppointments.map((apt, i) => (
-                                <div key={i} className="mb-1">
-                                    <div>ID: {apt.id}</div>
-                                    <div>Original: {apt.originalDate}</div>
-                                    <div>Extracted: {apt.extractedDate}</div>
-                                    <div>Patient: {apt.patientName}</div>
-                                    <div>Original Time: {apt.time}</div>
-                                    <div>Extracted Time: {DateHelper.extractTimeOnly(apt.time)}</div>
-                                    <div>---</div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mt-2 text-xs">
-                            <button 
-                                onClick={testAddAppointment}
-                                className="bg-blue-500 text-white px-2 py-1 rounded mr-2"
-                            >
-                                Test Add
-                            </button>
-                            <button 
-                                onClick={() => console.log('All appointments:', appointments)}
-                                className="bg-green-500 text-white px-2 py-1 rounded"
-                            >
-                                Log All
-                            </button>
-                        </div>
-                    </div>
-                );
-            };
-
             return (
                 <div className="min-h-screen bg-gray-50">
-                    <DebugPanel />
-                    
                     {/* Header */}
                     <header className="bg-blue-600 text-white shadow-lg">
                         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -1527,13 +1721,6 @@
                                     <StatusIndicator />
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <button
-                                        onClick={() => setDebugMode(!debugMode)}
-                                        className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                                    >
-                                        <Icons.Bug />
-                                        Debug {debugMode ? 'OFF' : 'ON'}
-                                    </button>
                                     <button
                                         onClick={manualSync}
                                         disabled={loading}
@@ -1563,7 +1750,7 @@
                                         key={clinic.id}
                                         onClick={() => {
                                             setActiveClinicId(clinic.id);
-                                            setCart([]); // Limpiar carrito al cambiar clínica
+                                            setCart([]);
                                         }}
                                         className={`flex-1 min-w-64 max-w-sm p-4 rounded-lg border-2 transition-all ${
                                             activeClinicId === clinic.id
@@ -1574,7 +1761,7 @@
                                         <div className="text-center">
                                             <h3 className="font-semibold text-lg">{clinic.name}</h3>
                                             <p className="text-sm opacity-75">{clinic.location}</p>
-                                            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                                            <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
                                                 <div>
                                                     <p className="font-medium">{medications.filter(m => m.clinicId === clinic.id).length}</p>
                                                     <p className="opacity-75">Productos</p>
@@ -1582,6 +1769,10 @@
                                                 <div>
                                                     <p className="font-medium">{getTodayAppointments(null, clinic.id).length}</p>
                                                     <p className="opacity-75">Citas hoy</p>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">{patients.filter(p => p.clinicId === clinic.id).length}</p>
+                                                    <p className="opacity-75">Pacientes</p>
                                                 </div>
                                                 <div>
                                                     <p className="font-medium">{medications.filter(m => m.clinicId === clinic.id && m.quantity <= m.minStock).length}</p>
@@ -1604,6 +1795,7 @@
                                     { id: 'inventory', label: 'Inventario', icon: <Icons.Package /> },
                                     { id: 'sales', label: 'Ventas', icon: <Icons.ShoppingCart /> },
                                     { id: 'appointments', label: 'Citas', icon: <Icons.Calendar /> },
+                                    { id: 'medical-records', label: 'Historiales', icon: <Icons.User /> },
                                     { id: 'reports', label: 'Reportes', icon: <Icons.TrendingUp /> }
                                 ].map(tab => (
                                     <button
@@ -1638,7 +1830,6 @@
                                 </div>
 
                                 {totalProducts === 0 ? (
-                                    // Mensaje de bienvenida
                                     <div className="text-center py-12">
                                         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-auto">
                                             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1659,7 +1850,7 @@
                                 ) : (
                                     <>
                                         {/* Stats Cards */}
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                                        <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
                                             <div className="bg-white rounded-lg shadow p-6">
                                                 <div className="flex items-center justify-between">
                                                     <div>
@@ -1719,122 +1910,16 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        {/* Alertas, Top ventas y Citas de hoy */}
-                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                            {/* Alertas de stock bajo */}
-                                            <div className="bg-white rounded-lg shadow">
-                                                <div className="p-6 border-b">
-                                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                                                        <Icons.AlertTriangle />
-                                                        Stock Bajo
-                                                    </h3>
-                                                </div>
-                                                <div className="p-6">
-                                                    {lowStockMeds.length === 0 ? (
-                                                        <p className="text-gray-500">No hay productos con stock bajo</p>
-                                                    ) : (
-                                                        <div className="space-y-3">
-                                                            {lowStockMeds.slice(0, 5).map(med => (
-                                                                <div key={med.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                                                                    <div>
-                                                                        <p className="font-medium text-gray-900">{med.name}</p>
-                                                                        <p className="text-sm text-gray-600">{med.presentation}</p>
-                                                                    </div>
-                                                                    <span className="text-red-600 font-bold">{med.quantity} unidades</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Top medicamentos más vendidos */}
-                                            <div className="bg-white rounded-lg shadow">
-                                                <div className="p-6 border-b">
-                                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                                                        <Icons.TrendingUp />
-                                                        Más Vendidos
-                                                    </h3>
-                                                </div>
-                                                <div className="p-6">
-                                                    {topSellingMeds.filter(med => med.totalSold > 0).length === 0 ? (
-                                                        <p className="text-gray-500">No hay ventas registradas</p>
-                                                    ) : (
-                                                        <div className="space-y-3">
-                                                            {topSellingMeds.filter(med => med.totalSold > 0).map((med, index) => (
-                                                                <div key={med.id} className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <span className="bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">
-                                                                            {index + 1}
-                                                                        </span>
-                                                                        <div>
-                                                                            <p className="font-medium text-gray-900">{med.name}</p>
-                                                                            <p className="text-sm text-gray-600">{med.presentation}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className="text-green-600 font-bold">{med.totalSold} vendidos</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Citas de hoy */}
-                                            <div className="bg-white rounded-lg shadow">
-                                                <div className="p-6 border-b">
-                                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                                                        <Icons.Calendar />
-                                                        Citas de Hoy ({todayAppointments.length})
-                                                    </h3>
-                                                </div>
-                                                <div className="p-6">
-                                                    {todayAppointments.length === 0 ? (
-                                                        <p className="text-gray-500">No hay citas programadas para hoy</p>
-                                                    ) : (
-                                                        <div className="space-y-4">
-                                                            {doctors.map(doctor => {
-                                                                const doctorAppointments = getTodayAppointments(doctor.id);
-                                                                if (doctorAppointments.length === 0) return null;
-                                                                
-                                                                return (
-                                                                    <div key={doctor.id} className="border-l-4 border-gray-200 pl-4">
-                                                                        <h4 className={`font-medium text-${doctor.color}-600 mb-2`}>
-                                                                            {doctor.name} - {doctor.specialty}
-                                                                        </h4>
-                                                                        <div className="space-y-2">
-                                                                            {doctorAppointments.slice(0, 3).map(apt => (
-                                                                                <div key={apt.id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg text-sm">
-                                                                                    <div>
-                                                                                        <p className="font-medium text-gray-900">{apt.patientName}</p>
-                                                                                        <p className="text-gray-600 flex items-center gap-1">
-                                                                                            <Icons.Clock />
-                                                                                            {DateHelper.extractTimeOnly(apt.time)} - {apt.type}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                                                        apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
-                                                                                        apt.status === 'Programada' ? 'bg-blue-100 text-blue-800' :
-                                                                                        apt.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
-                                                                                        'bg-gray-100 text-gray-800'
-                                                                                    }`}>
-                                                                                        {apt.status}
-                                                                                    </span>
-                                                                                </div>
-                                                                            ))}
-                                                                            {doctorAppointments.length > 3 && (
-                                                                                <p className="text-xs text-gray-500">
-                                                                                    +{doctorAppointments.length - 3} citas más
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                            <div className="bg-white rounded-lg shadow p-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-600">Pacientes</p>
+                                                        <p className="text-2xl font-bold text-purple-600">{totalPatients}</p>
+                                                    </div>
+                                                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                                                        <Icons.User />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1842,7 +1927,7 @@
                                         {/* Acciones rápidas */}
                                         <div className="bg-white rounded-lg shadow p-6">
                                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                                 <button
                                                     onClick={() => setShowAddForm(true)}
                                                     disabled={loading}
@@ -1866,11 +1951,18 @@
                                                     Nueva Cita
                                                 </button>
                                                 <button
-                                                    onClick={() => setActiveTab('inventory')}
+                                                    onClick={() => setShowPatientForm(true)}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    <Icons.User />
+                                                    Nuevo Paciente
+                                                </button>
+                                                <button
+                                                    onClick={() => setActiveTab('medical-records')}
                                                     className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
                                                 >
-                                                    <Icons.Package />
-                                                    Ver Inventario
+                                                    <Icons.FileText />
+                                                    Ver Historiales
                                                 </button>
                                             </div>
                                         </div>
@@ -1882,7 +1974,6 @@
                         {/* Inventario */}
                         {activeTab === 'inventory' && (
                             <div className="space-y-6">
-                                {/* Indicador de clínica activa */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex items-center justify-center gap-3">
                                         <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
@@ -1907,20 +1998,6 @@
                                                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
                                             />
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => setViewMode('grid')}
-                                                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                            >
-                                                <Icons.Grid />
-                                            </button>
-                                            <button
-                                                onClick={() => setViewMode('list')}
-                                                className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                            >
-                                                <Icons.List />
-                                            </button>
-                                        </div>
                                         <button
                                             onClick={() => setShowAddForm(true)}
                                             disabled={loading}
@@ -1935,21 +2012,10 @@
                                 {filteredMedications.length === 0 ? (
                                     <div className="text-center py-12">
                                         <div className="bg-white rounded-lg shadow p-8">
-                                            <Icons.Package />
                                             <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay medicamentos</h3>
                                             <p className="text-gray-600 mb-4">
                                                 {medications.length === 0 ? 'Agrega tu primer medicamento' : 'No se encontraron resultados para tu búsqueda'}
                                             </p>
-                                            {medications.length === 0 && (
-                                                <button
-                                                    onClick={() => setShowAddForm(true)}
-                                                    disabled={loading}
-                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
-                                                >
-                                                    {loading ? <div className="loading"></div> : <Icons.Plus />}
-                                                    Agregar Medicamento
-                                                </button>
-                                            )}
                                         </div>
                                     </div>
                                 ) : (
@@ -2024,9 +2090,7 @@
 
                         {/* Ventas */}
                         {activeTab === 'sales' && (
-                            <>
                             <div className="space-y-6">
-                                {/* Indicador de clínica activa */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex items-center justify-center gap-3">
                                         <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
@@ -2035,127 +2099,123 @@
                                         </h2>
                                     </div>
                                 </div>
-                            </div>
 
-                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Búsqueda y productos */}
-                                <div className="lg:col-span-2 space-y-6">
-                                    <div className="bg-white rounded-lg shadow p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Buscar Productos</h3>
-                                        <div className="relative mb-4">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <Icons.Search />
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    <div className="lg:col-span-2 space-y-6">
+                                        <div className="bg-white rounded-lg shadow p-6">
+                                            <h3 className="text-lg font-semibold mb-4">Buscar Productos</h3>
+                                            <div className="relative mb-4">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <Icons.Search />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar medicamentos para vender..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
                                             </div>
-                                            <input
-                                                type="text"
-                                                placeholder="Buscar medicamentos para vender..."
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            />
-                                        </div>
 
-                                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                                            {filteredMedications.filter(med => med.quantity > 0).length === 0 ? (
-                                                <p className="text-gray-500 text-center py-8">
-                                                    No hay productos disponibles para venta en {clinics.find(c => c.id === activeClinicId)?.name}
-                                                </p>
-                                            ) : (
-                                                filteredMedications.filter(med => med.quantity > 0).map(med => (
-                                                    <div key={med.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                                                        <div className="flex-1">
-                                                            <h4 className="font-medium text-gray-900">{med.name}</h4>
-                                                            <p className="text-sm text-gray-600">{med.presentation} - {med.activeSubstance}</p>
-                                                            <div className="flex gap-4 text-sm text-gray-500">
-                                                                <span>Stock: {med.quantity}</span>
-                                                                <span>Precio: ${med.publicPrice}</span>
+                                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                                                {filteredMedications.filter(med => med.quantity > 0).length === 0 ? (
+                                                    <p className="text-gray-500 text-center py-8">
+                                                        No hay productos disponibles para venta
+                                                    </p>
+                                                ) : (
+                                                    filteredMedications.filter(med => med.quantity > 0).map(med => (
+                                                        <div key={med.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                                            <div className="flex-1">
+                                                                <h4 className="font-medium text-gray-900">{med.name}</h4>
+                                                                <p className="text-sm text-gray-600">{med.presentation} - {med.activeSubstance}</p>
+                                                                <div className="flex gap-4 text-sm text-gray-500">
+                                                                    <span>Stock: {med.quantity}</span>
+                                                                    <span>Precio: ${med.publicPrice}</span>
+                                                                </div>
                                                             </div>
+                                                            <button
+                                                                onClick={() => addToCart(med)}
+                                                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                                                            >
+                                                                <Icons.Plus />
+                                                                Agregar
+                                                            </button>
                                                         </div>
-                                                        <button
-                                                            onClick={() => addToCart(med)}
-                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                                                        >
-                                                            <Icons.Plus />
-                                                            Agregar
-                                                        </button>
-                                                    </div>
-                                                ))
-                                            )}
+                                                    ))
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* Carrito */}
-                                <div className="bg-white rounded-lg shadow p-6">
-                                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                                        <Icons.ShoppingCart />
-                                        Carrito ({cart.length})
-                                    </h3>
+                                    <div className="bg-white rounded-lg shadow p-6">
+                                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                            <Icons.ShoppingCart />
+                                            Carrito ({cart.length})
+                                        </h3>
 
-                                    {cart.length === 0 ? (
-                                        <p className="text-gray-500 text-center py-8">El carrito está vacío</p>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {cart.map(item => (
-                                                <div key={item.id} className="border border-gray-200 rounded-lg p-3">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h4 className="font-medium text-gray-900 text-sm pr-2">{item.name}</h4>
-                                                        <button
-                                                            onClick={() => updateCartQuantity(item.id, 0)}
-                                                            className="text-red-500 hover:text-red-700 transition-colors"
-                                                        >
-                                                            <Icons.X />
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600 mb-2">{item.presentation}</p>
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center gap-2">
+                                        {cart.length === 0 ? (
+                                            <p className="text-gray-500 text-center py-8">El carrito está vacío</p>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {cart.map(item => (
+                                                    <div key={item.id} className="border border-gray-200 rounded-lg p-3">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h4 className="font-medium text-gray-900 text-sm pr-2">{item.name}</h4>
                                                             <button
-                                                                onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
-                                                                className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-sm transition-colors"
+                                                                onClick={() => updateCartQuantity(item.id, 0)}
+                                                                className="text-red-500 hover:text-red-700 transition-colors"
                                                             >
-                                                                -
-                                                            </button>
-                                                            <span className="w-8 text-center text-sm">{item.quantity}</span>
-                                                            <button
-                                                                onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
-                                                                className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-sm transition-colors"
-                                                            >
-                                                                +
+                                                                <Icons.X />
                                                             </button>
                                                         </div>
-                                                        <span className="text-sm font-medium">${(item.publicPrice * item.quantity).toFixed(2)}</span>
+                                                        <p className="text-xs text-gray-600 mb-2">{item.presentation}</p>
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                                                                    className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-sm transition-colors"
+                                                                >
+                                                                    -
+                                                                </button>
+                                                                <span className="w-8 text-center text-sm">{item.quantity}</span>
+                                                                <button
+                                                                    onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                                                                    className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-sm transition-colors"
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                            <span className="text-sm font-medium">${(item.publicPrice * item.quantity).toFixed(2)}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ))}
 
-                                            <div className="border-t pt-4">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <span className="font-semibold">Total:</span>
-                                                    <span className="font-bold text-lg">
-                                                        ${cart.reduce((sum, item) => sum + (item.publicPrice * item.quantity), 0).toFixed(2)}
-                                                    </span>
+                                                <div className="border-t pt-4">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <span className="font-semibold">Total:</span>
+                                                        <span className="font-bold text-lg">
+                                                            ${cart.reduce((sum, item) => sum + (item.publicPrice * item.quantity), 0).toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={processSale}
+                                                        disabled={loading}
+                                                        className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                                                    >
+                                                        {loading ? <div className="loading"></div> : <Icons.Check />}
+                                                        Procesar Venta
+                                                    </button>
                                                 </div>
-                                                <button
-                                                    onClick={processSale}
-                                                    disabled={loading}
-                                                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                                                >
-                                                    {loading ? <div className="loading"></div> : <Icons.Check />}
-                                                    Procesar Venta
-                                                </button>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                            </>
                         )}
 
                         {/* Citas/Calendario */}
                         {activeTab === 'appointments' && (
                             <div className="space-y-6">
-                                {/* Indicador de clínica activa */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex items-center justify-center gap-3">
                                         <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
@@ -2184,7 +2244,6 @@
                                     </button>
                                 </div>
 
-                                {/* Selector de Médicos */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex flex-wrap gap-4">
                                         {doctors.map(doctor => (
@@ -2210,7 +2269,6 @@
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                                    {/* Calendario del Médico Activo */}
                                     <div className="lg:col-span-3 bg-white rounded-lg shadow">
                                         <div className="p-6 border-b">
                                             <div className="flex items-center justify-between mb-4">
@@ -2239,7 +2297,6 @@
                                                 </div>
                                             </div>
 
-                                            {/* Días de la semana */}
                                             <div className="grid grid-cols-7 gap-px mb-2">
                                                 {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
                                                     <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
@@ -2248,7 +2305,6 @@
                                                 ))}
                                             </div>
 
-                                            {/* Días del mes */}
                                             <div className="grid grid-cols-7 gap-px">
                                                 {getDaysInMonth(currentMonth).map((day, index) => {
                                                     const dayAppointments = getAppointmentsForDate(day.date, activeDoctorId);
@@ -2313,7 +2369,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Resumen de citas del médico activo */}
                                     <div className="bg-white rounded-lg shadow">
                                         <div className="p-6 border-b">
                                             <h3 className="text-lg font-semibold">
@@ -2324,7 +2379,7 @@
                                             </p>
                                         </div>
                                         <div className="p-6">
-                                            <h4 className="font-medium mb-3">Citas de Hoy en {clinics.find(c => c.id === activeClinicId)?.name}</h4>
+                                            <h4 className="font-medium mb-3">Citas de Hoy</h4>
                                             {getTodayAppointments(activeDoctorId, activeClinicId).length === 0 ? (
                                                 <p className="text-gray-500 text-sm">No hay citas programadas para hoy</p>
                                             ) : (
@@ -2351,6 +2406,37 @@
                                                                 </span>
                                                             </div>
                                                             <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const existingPatient = patients.find(p => 
+                                                                            `${p.firstName} ${p.lastName}`.toLowerCase() === apt.patientName.toLowerCase() &&
+                                                                            p.clinicId === activeClinicId
+                                                                        );
+                                                                        
+                                                                        if (existingPatient) {
+                                                                            setActiveTab('medical-records');
+                                                                            setSelectedPatient(existingPatient);
+                                                                        } else {
+                                                                            const names = apt.patientName.split(' ');
+                                                                            const firstName = names[0] || '';
+                                                                            const lastName = names.slice(1).join(' ') || '';
+                                                                            
+                                                                            setPatientForm({
+                                                                                ...patientForm,
+                                                                                firstName,
+                                                                                lastName,
+                                                                                phone: apt.phone || '',
+                                                                                email: apt.email || '',
+                                                                                clinicId: activeClinicId
+                                                                            });
+                                                                            setShowPatientForm(true);
+                                                                        }
+                                                                    }}
+                                                                    className="flex-1 bg-purple-50 hover:bg-purple-100 text-purple-600 px-2 py-1 rounded text-xs flex items-center justify-center gap-1 transition-colors"
+                                                                >
+                                                                    <Icons.User />
+                                                                    Historial
+                                                                </button>
                                                                 <button
                                                                     onClick={() => {
                                                                         setEditingAppointment(apt);
@@ -2389,10 +2475,405 @@
                             </div>
                         )}
 
+                        {/* Historiales Médicos */}
+                        {activeTab === 'medical-records' && (
+                            <div className="space-y-6">
+                                <div className="bg-white rounded-lg shadow p-4">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            Historiales Médicos - {clinics.find(c => c.id === activeClinicId)?.name}
+                                        </h2>
+                                    </div>
+                                </div>
+
+                                {!selectedPatient ? (
+                                    <>
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                            <div></div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="relative">
+                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                        <Icons.Search />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Buscar pacientes..."
+                                                        value={patientSearchTerm}
+                                                        onChange={(e) => setPatientSearchTerm(e.target.value)}
+                                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={() => setShowPatientForm(true)}
+                                                    disabled={loading}
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+                                                >
+                                                    {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                                    Nuevo Paciente
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {filteredPatients.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <div className="bg-white rounded-lg shadow p-8">
+                                                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                        <Icons.User />
+                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay pacientes</h3>
+                                                    <p className="text-gray-600 mb-4">
+                                                        {patients.length === 0 ? 'Registra tu primer paciente' : 'No se encontraron resultados para tu búsqueda'}
+                                                    </p>
+                                                    {patients.length === 0 && (
+                                                        <button
+                                                            onClick={() => setShowPatientForm(true)}
+                                                            disabled={loading}
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
+                                                        >
+                                                            {loading ? <div className="loading"></div> : <Icons.Plus />}
+                                                            Registrar Paciente
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {filteredPatients.map(patient => {
+                                                    const lastRecord = getLastMedicalRecord(patient.id);
+                                                    const totalConsultations = getPatientMedicalRecords(patient.id).length;
+                                                    const age = patient.dateOfBirth ? 
+                                                        new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear() : 'N/A';
+
+                                                    return (
+                                                        <div key={patient.id} className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer">
+                                                            <div 
+                                                                className="p-6"
+                                                                onClick={() => setSelectedPatient(patient)}
+                                                            >
+                                                                <div className="flex items-start justify-between mb-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                                                                            <Icons.User />
+                                                                        </div>
+                                                                        <div>
+                                                                            <h3 className="font-semibold text-gray-900">
+                                                                                {patient.firstName} {patient.lastName}
+                                                                            </h3>
+                                                                            <p className="text-sm text-gray-600">{age} años • {patient.gender}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-500">
+                                                                        {totalConsultations} consulta{totalConsultations !== 1 ? 's' : ''}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="space-y-2 text-sm text-gray-600">
+                                                                    {patient.phone && (
+                                                                        <p className="flex items-center gap-2">
+                                                                            📞 {patient.phone}
+                                                                        </p>
+                                                                    )}
+                                                                    {patient.email && (
+                                                                        <p className="flex items-center gap-2">
+                                                                            📧 {patient.email}
+                                                                        </p>
+                                                                    )}
+                                                                    {patient.bloodType && (
+                                                                        <p className="flex items-center gap-2">
+                                                                            🩸 Tipo: {patient.bloodType}
+                                                                        </p>
+                                                                    )}
+                                                                    {lastRecord && (
+                                                                        <p className="flex items-center gap-2">
+                                                                            🗓️ Última consulta: {new Date(lastRecord.date).toLocaleDateString()}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setConsultationForm({
+                                                                                ...consultationForm,
+                                                                                patientId: patient.id,
+                                                                                clinicId: activeClinicId,
+                                                                                doctorId: activeDoctorId
+                                                                            });
+                                                                            setSelectedPatientForConsultation(patient);
+                                                                            setShowConsultationForm(true);
+                                                                        }}
+                                                                        className="flex-1 bg-green-50 hover:bg-green-100 text-green-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
+                                                                    >
+                                                                        <Icons.Plus />
+                                                                        Consulta
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setEditingPatient(patient);
+                                                                            setPatientForm({
+                                                                                firstName: patient.firstName,
+                                                                                lastName: patient.lastName,
+                                                                                dateOfBirth: patient.dateOfBirth || '',
+                                                                                gender: patient.gender,
+                                                                                phone: patient.phone || '',
+                                                                                email: patient.email || '',
+                                                                                address: patient.address || '',
+                                                                                emergencyContact: patient.emergencyContact || '',
+                                                                                emergencyPhone: patient.emergencyPhone || '',
+                                                                                bloodType: patient.bloodType || '',
+                                                                                allergies: patient.allergies || '',
+                                                                                chronicConditions: patient.chronicConditions || '',
+                                                                                clinicId: patient.clinicId
+                                                                            });
+                                                                        }}
+                                                                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors"
+                                                                    >
+                                                                        <Icons.Edit />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                                        <div className="bg-white rounded-lg shadow p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="text-lg font-semibold">Información del Paciente</h3>
+                                                <button
+                                                    onClick={() => setSelectedPatient(null)}
+                                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                >
+                                                    <Icons.X />
+                                                </button>
+                                            </div>
+
+                                            <div className="text-center mb-6">
+                                                <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                                    <Icons.User />
+                                                </div>
+                                                <h4 className="font-semibold text-xl text-gray-900">
+                                                    {selectedPatient.firstName} {selectedPatient.lastName}
+                                                </h4>
+                                                <p className="text-gray-600">
+                                                    {selectedPatient.dateOfBirth ? 
+                                                        new Date().getFullYear() - new Date(selectedPatient.dateOfBirth).getFullYear() : 'N/A'} años • {selectedPatient.gender}
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-3 text-sm">
+                                                {selectedPatient.phone && (
+                                                    <div>
+                                                        <span className="font-medium text-gray-700">Teléfono:</span>
+                                                        <p className="text-gray-600">{selectedPatient.phone}</p>
+                                                    </div>
+                                                )}
+                                                {selectedPatient.email && (
+                                                    <div>
+                                                        <span className="font-medium text-gray-700">Email:</span>
+                                                        <p className="text-gray-600">{selectedPatient.email}</p>
+                                                    </div>
+                                                )}
+                                                {selectedPatient.bloodType && (
+                                                    <div>
+                                                        <span className="font-medium text-gray-700">Tipo de sangre:</span>
+                                                        <p className="text-gray-600">{selectedPatient.bloodType}</p>
+                                                    </div>
+                                                )}
+                                                {selectedPatient.allergies && (
+                                                    <div>
+                                                        <span className="font-medium text-gray-700">Alergias:</span>
+                                                        <p className="text-gray-600">{selectedPatient.allergies}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-6 space-y-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setConsultationForm({
+                                                            ...consultationForm,
+                                                            patientId: selectedPatient.id,
+                                                            clinicId: activeClinicId,
+                                                            doctorId: activeDoctorId
+                                                        });
+                                                        setSelectedPatientForConsultation(selectedPatient);
+                                                        setShowConsultationForm(true);
+                                                    }}
+                                                    className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    <Icons.Plus />
+                                                    Nueva Consulta
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="lg:col-span-3 bg-white rounded-lg shadow">
+                                            <div className="p-6 border-b">
+                                                <h3 className="text-lg font-semibold">Historial de Consultas</h3>
+                                            </div>
+                                            <div className="p-6">
+                                                {getPatientMedicalRecords(selectedPatient.id).length === 0 ? (
+                                                    <div className="text-center py-8">
+                                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                            <Icons.Calendar />
+                                                        </div>
+                                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Sin consultas registradas</h3>
+                                                        <p className="text-gray-600 mb-4">Este paciente no tiene consultas médicas registradas.</p>
+                                                        <button
+                                                            onClick={() => {
+                                                                setConsultationForm({
+                                                                    ...consultationForm,
+                                                                    patientId: selectedPatient.id,
+                                                                    clinicId: activeClinicId,
+                                                                    doctorId: activeDoctorId
+                                                                });
+                                                                setSelectedPatientForConsultation(selectedPatient);
+                                                                setShowConsultationForm(true);
+                                                            }}
+                                                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto transition-colors"
+                                                        >
+                                                            <Icons.Plus />
+                                                            Primera Consulta
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-6">
+                                                        {getPatientMedicalRecords(selectedPatient.id).map((record, index) => {
+                                                            const doctor = doctors.find(d => d.id === record.doctorId);
+                                                            const clinic = clinics.find(c => c.id === record.clinicId);
+                                                            
+                                                            return (
+                                                                <div key={record.id} className="border-l-4 border-blue-200 pl-6 relative">
+                                                                    <div className="absolute -left-2 top-0 w-4 h-4 bg-blue-500 rounded-full"></div>
+                                                                    
+                                                                    <div className="bg-gray-50 rounded-lg p-4">
+                                                                        <div className="flex justify-between items-start mb-3">
+                                                                            <div>
+                                                                                <h4 className="font-semibold text-gray-900">
+                                                                                    {new Date(record.date).toLocaleDateString('es-ES', {
+                                                                                        year: 'numeric',
+                                                                                        month: 'long',
+                                                                                        day: 'numeric'
+                                                                                    })}
+                                                                                </h4>
+                                                                                <p className="text-sm text-gray-600">
+                                                                                    {doctor?.name} • {clinic?.name}
+                                                                                </p>
+                                                                            </div>
+                                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                                record.status === 'Completada' ? 'bg-green-100 text-green-800' :
+                                                                                record.status === 'En progreso' ? 'bg-yellow-100 text-yellow-800' :
+                                                                                'bg-gray-100 text-gray-800'
+                                                                            }`}>
+                                                                                {record.status}
+                                                                            </span>
+                                                                        </div>
+                                                                        
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                                            {record.reason && (
+                                                                                <div>
+                                                                                    <span className="font-medium text-gray-700">Motivo:</span>
+                                                                                    <p className="text-gray-600">{record.reason}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.diagnosis && (
+                                                                                <div>
+                                                                                    <span className="font-medium text-gray-700">Diagnóstico:</span>
+                                                                                    <p className="text-gray-600">{record.diagnosis}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.treatment && (
+                                                                                <div>
+                                                                                    <span className="font-medium text-gray-700">Tratamiento:</span>
+                                                                                    <p className="text-gray-600">{record.treatment}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.prescriptions && record.prescriptions.length > 0 && (
+                                                                                <div>
+                                                                                    <span className="font-medium text-gray-700">Medicamentos:</span>
+                                                                                    <ul className="text-gray-600">
+                                                                                        {record.prescriptions.map((prescription, i) => (
+                                                                                            <li key={i}>• {prescription}</li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {(record.vitalSigns?.bloodPressure || record.vitalSigns?.temperature || 
+                                                                          record.vitalSigns?.weight || record.vitalSigns?.height) && (
+                                                                            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                                                                                <span className="font-medium text-gray-700 text-sm">Signos vitales:</span>
+                                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1 text-sm text-gray-600">
+                                                                                    {record.vitalSigns?.bloodPressure && <span>PA: {record.vitalSigns.bloodPressure}</span>}
+                                                                                    {record.vitalSigns?.temperature && <span>Temp: {record.vitalSigns.temperature}°C</span>}
+                                                                                    {record.vitalSigns?.weight && <span>Peso: {record.vitalSigns.weight}kg</span>}
+                                                                                    {record.vitalSigns?.height && <span>Altura: {record.vitalSigns.height}cm</span>}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {record.notes && (
+                                                                            <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
+                                                                                <span className="font-medium text-gray-700 text-sm">Notas:</span>
+                                                                                <p className="text-gray-600 text-sm mt-1">{record.notes}</p>
+                                                                            </div>
+                                                                        )}
+
+                                                                        <div className="flex gap-2 mt-4">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    setEditingConsultation(record);
+                                                                                    setConsultationForm({
+                                                                                        patientId: record.patientId,
+                                                                                        doctorId: record.doctorId,
+                                                                                        clinicId: record.clinicId,
+                                                                                        date: DateHelper.extractDateOnly(record.date),
+                                                                                        reason: record.reason || '',
+                                                                                        symptoms: record.symptoms || '',
+                                                                                        diagnosis: record.diagnosis || '',
+                                                                                        treatment: record.treatment || '',
+                                                                                        prescriptions: record.prescriptions || [],
+                                                                                        vitalSigns: record.vitalSigns || {
+                                                                                            bloodPressure: '',
+                                                                                            temperature: '',
+                                                                                            weight: '',
+                                                                                            height: '',
+                                                                                            heartRate: ''
+                                                                                        },
+                                                                                        notes: record.notes || '',
+                                                                                        followUpDate: record.followUpDate || '',
+                                                                                        status: record.status
+                                                                                    });
+                                                                                    setSelectedPatientForConsultation(selectedPatient);
+                                                                                }}
+                                                                                className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded text-sm flex items-center justify-center gap-1 transition-colors"
+                                                                            >
+                                                                                <Icons.Edit />
+                                                                                Editar
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Reportes */}
                         {activeTab === 'reports' && (
                             <div className="space-y-6">
-                                {/* Indicador de clínica activa */}
                                 <div className="bg-white rounded-lg shadow p-4">
                                     <div className="flex items-center justify-center gap-3">
                                         <div className={`w-4 h-4 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
@@ -2403,7 +2884,6 @@
                                 </div>
                                 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Medicamentos más vendidos */}
                                     <div className="bg-white rounded-lg shadow p-6">
                                         <h3 className="text-lg font-semibold mb-4">Medicamentos Más Vendidos</h3>
                                         <div className="space-y-3">
@@ -2431,105 +2911,41 @@
                                         </div>
                                     </div>
 
-                                    {/* Historial de ventas */}
                                     <div className="bg-white rounded-lg shadow p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Historial de Ventas</h3>
-                                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                                            {salesHistory.filter(sale => sale.clinicId === activeClinicId).length === 0 ? (
-                                                <p className="text-gray-500 text-center py-8">No hay ventas registradas</p>
-                                            ) : (
-                                                salesHistory.filter(sale => sale.clinicId === activeClinicId).slice().reverse().map(sale => (
-                                                    <div key={sale.id} className="border border-gray-200 rounded-lg p-3">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <span className="text-sm text-gray-600">
-                                                                {new Date(sale.date).toLocaleString()}
-                                                            </span>
-                                                            <span className="font-bold text-green-600">${sale.total.toFixed(2)}</span>
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">
-                                                            {sale.items && sale.items.map(item => (
-                                                                <div key={item.id}>
-                                                                    {item.name} x{item.quantity}
+                                        <h3 className="text-lg font-semibold mb-4">Pacientes Más Frecuentes</h3>
+                                        <div className="space-y-3">
+                                            {(() => {
+                                                const clinicPatients = patients.filter(p => p.clinicId === activeClinicId);
+                                                const patientConsultations = clinicPatients.map(patient => ({
+                                                    ...patient,
+                                                    consultationCount: getPatientMedicalRecords(patient.id).length
+                                                }))
+                                                .filter(p => p.consultationCount > 0)
+                                                .sort((a, b) => b.consultationCount - a.consultationCount)
+                                                .slice(0, 5);
+
+                                                return patientConsultations.length === 0 ? (
+                                                    <p className="text-gray-500 text-center py-8">No hay consultas registradas</p>
+                                                ) : (
+                                                    patientConsultations.map((patient, index) => (
+                                                        <div key={patient.id} className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="bg-purple-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">
+                                                                    {index + 1}
+                                                                </span>
+                                                                <div>
+                                                                    <p className="font-medium text-gray-900">{patient.firstName} {patient.lastName}</p>
+                                                                    <p className="text-sm text-gray-600">{patient.phone || 'Sin teléfono'}</p>
                                                                 </div>
-                                                            ))}
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="font-bold text-purple-600">{patient.consultationCount}</p>
+                                                                <p className="text-sm text-gray-500">consulta{patient.consultationCount !== 1 ? 's' : ''}</p>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Citas por médico */}
-                                    <div className="bg-white rounded-lg shadow p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Citas por Médico</h3>
-                                        <div className="space-y-3">
-                                            {doctors.map(doctor => {
-                                                const doctorAppointments = appointments.filter(apt => apt.doctorId === doctor.id && apt.clinicId === activeClinicId);
-                                                if (doctorAppointments.length === 0) return null;
-                                                
-                                                return (
-                                                    <div key={doctor.id} className={`flex justify-between items-center p-3 bg-${doctor.color}-50 rounded-lg`}>
-                                                        <div>
-                                                            <span className="font-medium text-gray-900">{doctor.name}</span>
-                                                            <p className="text-sm text-gray-600">{doctor.specialty}</p>
-                                                        </div>
-                                                        <span className={`font-bold text-${doctor.color}-600`}>{doctorAppointments.length}</span>
-                                                    </div>
+                                                    ))
                                                 );
-                                            })}
-                                            {appointments.filter(apt => apt.clinicId === activeClinicId).length === 0 && (
-                                                <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Citas por tipo */}
-                                    <div className="bg-white rounded-lg shadow p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Citas por Tipo</h3>
-                                        <div className="space-y-3">
-                                            {appointmentTypes.map(type => {
-                                                const count = appointments.filter(apt => apt.type === type && apt.clinicId === activeClinicId).length;
-                                                if (count === 0) return null;
-                                                
-                                                return (
-                                                    <div key={type} className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                                                        <span className="font-medium text-gray-900">{type}</span>
-                                                        <span className="font-bold text-purple-600">{count}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {appointments.filter(apt => apt.clinicId === activeClinicId).length === 0 && (
-                                                <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Citas por estado */}
-                                    <div className="bg-white rounded-lg shadow p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Citas por Estado</h3>
-                                        <div className="space-y-3">
-                                            {appointmentStatuses.map(status => {
-                                                const count = appointments.filter(apt => apt.status === status && apt.clinicId === activeClinicId).length;
-                                                if (count === 0) return null;
-                                                
-                                                return (
-                                                    <div key={status} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                                        <span className="font-medium text-gray-900">{status}</span>
-                                                        <span className={`font-bold ${
-                                                            status === 'Confirmada' ? 'text-green-600' :
-                                                            status === 'Programada' ? 'text-blue-600' :
-                                                            status === 'En progreso' ? 'text-yellow-600' :
-                                                            status === 'Completada' ? 'text-gray-600' :
-                                                            'text-red-600'
-                                                        }`}>
-                                                            {count}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {appointments.filter(apt => apt.clinicId === activeClinicId).length === 0 && (
-                                                <p className="text-gray-500 text-center py-8">No hay citas registradas</p>
-                                            )}
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -2537,8 +2953,7 @@
                         )}
                     </div>
 
-                    
-                    {/* Modal Agregar/Editar Medicamento */}
+                    {/* Modales */}
                     {(showAddForm || editingMed) && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                             <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto fade-in">
@@ -2755,19 +3170,6 @@
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 min="1"
                                                 placeholder="Cantidad"
-                                                disabled={loading}
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                Fecha de entrada
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={addStockData.date}
-                                                onChange={(e) => setAddStockData({...addStockData, date: e.target.value})}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 disabled={loading}
                                             />
                                         </div>
@@ -3006,6 +3408,510 @@
                         </div>
                     )}
 
+                    {/* Modal Agregar/Editar Paciente */}
+                    {(showPatientForm || editingPatient) && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto fade-in">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">
+                                            {editingPatient ? 'Editar Paciente' : 'Nuevo Paciente'}
+                                        </h3>
+                                        <button
+                                            onClick={() => {
+                                                setShowPatientForm(false);
+                                                setEditingPatient(null);
+                                                resetPatientForm();
+                                            }}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <Icons.X />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Nombres *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={patientForm.firstName}
+                                                    onChange={(e) => setPatientForm({...patientForm, firstName: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="Nombres"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Apellidos *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={patientForm.lastName}
+                                                    onChange={(e) => setPatientForm({...patientForm, lastName: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="Apellidos"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Fecha de nacimiento
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={patientForm.dateOfBirth}
+                                                    onChange={(e) => setPatientForm({...patientForm, dateOfBirth: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Género
+                                                </label>
+                                                <select
+                                                    value={patientForm.gender}
+                                                    onChange={(e) => setPatientForm({...patientForm, gender: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    disabled={loading}
+                                                >
+                                                    {genders.map(gender => (
+                                                        <option key={gender} value={gender}>{gender}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Tipo de sangre
+                                                </label>
+                                                <select
+                                                    value={patientForm.bloodType}
+                                                    onChange={(e) => setPatientForm({...patientForm, bloodType: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    disabled={loading}
+                                                >
+                                                    <option value="">Seleccionar</option>
+                                                    {bloodTypes.map(type => (
+                                                        <option key={type} value={type}>{type}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Teléfono
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    value={patientForm.phone}
+                                                    onChange={(e) => setPatientForm({...patientForm, phone: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="123-456-7890"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Email
+                                                </label>
+                                                <input
+                                                    type="email"
+                                                    value={patientForm.email}
+                                                    onChange={(e) => setPatientForm({...patientForm, email: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="email@ejemplo.com"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Dirección
+                                            </label>
+                                            <textarea
+                                                value={patientForm.address}
+                                                onChange={(e) => setPatientForm({...patientForm, address: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                rows="2"
+                                                placeholder="Dirección completa"
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Contacto de emergencia
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={patientForm.emergencyContact}
+                                                    onChange={(e) => setPatientForm({...patientForm, emergencyContact: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="Nombre del contacto"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Teléfono de emergencia
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    value={patientForm.emergencyPhone}
+                                                    onChange={(e) => setPatientForm({...patientForm, emergencyPhone: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="123-456-7890"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Alergias conocidas
+                                            </label>
+                                            <textarea
+                                                value={patientForm.allergies}
+                                                onChange={(e) => setPatientForm({...patientForm, allergies: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                rows="2"
+                                                placeholder="Medicamentos, alimentos, etc."
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Condiciones crónicas
+                                            </label>
+                                            <textarea
+                                                value={patientForm.chronicConditions}
+                                                onChange={(e) => setPatientForm({...patientForm, chronicConditions: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                rows="2"
+                                                placeholder="Diabetes, hipertensión, etc."
+                                                disabled={loading}
+                                            />
+                                        </div>
+
+                                        <div className="flex gap-4 pt-4">
+                                            <button
+                                                onClick={() => {
+                                                    setShowPatientForm(false);
+                                                    setEditingPatient(null);
+                                                    resetPatientForm();
+                                                }}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={editingPatient ? updatePatient : addPatient}
+                                                disabled={loading}
+                                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? <div className="loading"></div> : null}
+                                                {editingPatient ? 'Actualizar' : 'Guardar'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Agregar/Editar Consulta Médica */}
+                    {(showConsultationForm || editingConsultation) && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto fade-in">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">
+                                            {editingConsultation ? 'Editar Consulta' : 'Nueva Consulta'}
+                                            {selectedPatientForConsultation && (
+                                                <span className="text-sm font-normal text-gray-600 block">
+                                                    {selectedPatientForConsultation.firstName} {selectedPatientForConsultation.lastName}
+                                                </span>
+                                            )}
+                                        </h3>
+                                        <button
+                                            onClick={() => {
+                                                setShowConsultationForm(false);
+                                                setEditingConsultation(null);
+                                                setSelectedPatientForConsultation(null);
+                                                resetConsultationForm();
+                                            }}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <Icons.X />
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <h4 className="font-medium text-gray-900">Información de la Consulta</h4>
+                                            
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Médico *
+                                                    </label>
+                                                    <select
+                                                        value={consultationForm.doctorId}
+                                                        onChange={(e) => setConsultationForm({...consultationForm, doctorId: parseInt(e.target.value)})}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        disabled={loading}
+                                                    >
+                                                        {doctors.map(doctor => (
+                                                            <option key={doctor.id} value={doctor.id}>
+                                                                {doctor.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Fecha *
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        value={consultationForm.date}
+                                                        onChange={(e) => setConsultationForm({...consultationForm, date: e.target.value})}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Motivo de consulta *
+                                                </label>
+                                                <textarea
+                                                    value={consultationForm.reason}
+                                                    onChange={(e) => setConsultationForm({...consultationForm, reason: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    rows="3"
+                                                    placeholder="Motivo de la consulta"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Síntomas
+                                                </label>
+                                                <textarea
+                                                    value={consultationForm.symptoms}
+                                                    onChange={(e) => setConsultationForm({...consultationForm, symptoms: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    rows="3"
+                                                    placeholder="Síntomas reportados"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Diagnóstico
+                                                </label>
+                                                <textarea
+                                                    value={consultationForm.diagnosis}
+                                                    onChange={(e) => setConsultationForm({...consultationForm, diagnosis: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    rows="3"
+                                                    placeholder="Diagnóstico médico"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Tratamiento
+                                                </label>
+                                                <textarea
+                                                    value={consultationForm.treatment}
+                                                    onChange={(e) => setConsultationForm({...consultationForm, treatment: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    rows="3"
+                                                    placeholder="Plan de tratamiento"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <h4 className="font-medium text-gray-900">Signos Vitales</h4>
+                                            
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Presión arterial
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={consultationForm.vitalSigns.bloodPressure}
+                                                        onChange={(e) => setConsultationForm({
+                                                            ...consultationForm, 
+                                                            vitalSigns: {...consultationForm.vitalSigns, bloodPressure: e.target.value}
+                                                        })}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="120/80"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Temperatura (°C)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={consultationForm.vitalSigns.temperature}
+                                                        onChange={(e) => setConsultationForm({
+                                                            ...consultationForm, 
+                                                            vitalSigns: {...consultationForm.vitalSigns, temperature: e.target.value}
+                                                        })}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="36.5"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Peso (kg)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={consultationForm.vitalSigns.weight}
+                                                        onChange={(e) => setConsultationForm({
+                                                            ...consultationForm, 
+                                                            vitalSigns: {...consultationForm.vitalSigns, weight: e.target.value}
+                                                        })}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="70"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Altura (cm)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={consultationForm.vitalSigns.height}
+                                                        onChange={(e) => setConsultationForm({
+                                                            ...consultationForm, 
+                                                            vitalSigns: {...consultationForm.vitalSigns, height: e.target.value}
+                                                        })}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="170"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Medicamentos recetados
+                                                </label>
+                                                <textarea
+                                                    value={consultationForm.prescriptions.join('\n')}
+                                                    onChange={(e) => setConsultationForm({
+                                                        ...consultationForm, 
+                                                        prescriptions: e.target.value.split('\n').filter(p => p.trim())
+                                                    })}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    rows="4"
+                                                    placeholder="Un medicamento por línea&#10;Ej: Paracetamol 500mg - 1 cada 8 horas"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Notas adicionales
+                                                </label>
+                                                <textarea
+                                                    value={consultationForm.notes}
+                                                    onChange={(e) => setConsultationForm({...consultationForm, notes: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    rows="3"
+                                                    placeholder="Observaciones adicionales"
+                                                    disabled={loading}
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Próxima cita
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        value={consultationForm.followUpDate}
+                                                        onChange={(e) => setConsultationForm({...consultationForm, followUpDate: e.target.value})}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Estado
+                                                    </label>
+                                                    <select
+                                                        value={consultationForm.status}
+                                                        onChange={(e) => setConsultationForm({...consultationForm, status: e.target.value})}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        disabled={loading}
+                                                    >
+                                                        {consultationStatuses.map(status => (
+                                                            <option key={status} value={status}>{status}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-6 mt-6 border-t">
+                                        <button
+                                            onClick={() => {
+                                                setShowConsultationForm(false);
+                                                setEditingConsultation(null);
+                                                setSelectedPatientForConsultation(null);
+                                                resetConsultationForm();
+                                            }}
+                                            disabled={loading}
+                                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={editingConsultation ? updateMedicalRecord : addMedicalRecord}
+                                            disabled={loading}
+                                            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                        >
+                                            {loading ? <div className="loading"></div> : null}
+                                            {editingConsultation ? 'Actualizar Consulta' : 'Guardar Consulta'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Modal Vista de Citas del Día */}
                     {showDayAppointments && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -3110,7 +4016,40 @@
                                                         </div>
                                                     )}
 
-                                                    <div className="flex gap-2">
+                                                    <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => {
+                                                                const existingPatient = patients.find(p => 
+                                                                    `${p.firstName} ${p.lastName}`.toLowerCase() === apt.patientName.toLowerCase() &&
+                                                                    p.clinicId === activeClinicId
+                                                                );
+                                                                
+                                                                if (existingPatient) {
+                                                                    setShowDayAppointments(false);
+                                                                    setActiveTab('medical-records');
+                                                                    setSelectedPatient(existingPatient);
+                                                                } else {
+                                                                    const names = apt.patientName.split(' ');
+                                                                    const firstName = names[0] || '';
+                                                                    const lastName = names.slice(1).join(' ') || '';
+                                                                    
+                                                                    setPatientForm({
+                                                                        ...patientForm,
+                                                                        firstName,
+                                                                        lastName,
+                                                                        phone: apt.phone || '',
+                                                                        email: apt.email || '',
+                                                                        clinicId: activeClinicId
+                                                                    });
+                                                                    setShowDayAppointments(false);
+                                                                    setShowPatientForm(true);
+                                                                }
+                                                            }}
+                                                            className="flex-1 bg-purple-50 hover:bg-purple-100 text-purple-600 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
+                                                        >
+                                                            <Icons.User />
+                                                            Historial
+                                                        </button>
                                                         <button
                                                             onClick={() => {
                                                                 setEditingAppointment(apt);
