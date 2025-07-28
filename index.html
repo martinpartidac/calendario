@@ -744,17 +744,23 @@
                 return results;
             }, [patients, patientSearchTerm, activeClinicId]);
 
-            // Obtener registros médicos de un paciente
-            const getPatientMedicalRecords = (patientId) => {
+            // Obtener registros médicos de un paciente (filtrado por clínica activa)
+            const getPatientMedicalRecords = (patientId, clinicId = null) => {
+                const targetClinicId = clinicId || activeClinicId;
                 return medicalRecords
-                    .filter(record => record.patientId === patientId)
+                    .filter(record => record.patientId === patientId && record.clinicId === targetClinicId)
                     .sort((a, b) => new Date(b.date) - new Date(a.date));
             };
 
-            // Obtener último registro médico de un paciente
-            const getLastMedicalRecord = (patientId) => {
-                const records = getPatientMedicalRecords(patientId);
+            // Obtener último registro médico de un paciente (filtrado por clínica activa)
+            const getLastMedicalRecord = (patientId, clinicId = null) => {
+                const records = getPatientMedicalRecords(patientId, clinicId);
                 return records.length > 0 ? records[0] : null;
+            };
+
+            // Obtener total de consultas de un paciente en todas las clínicas
+            const getTotalPatientConsultations = (patientId) => {
+                return medicalRecords.filter(record => record.patientId === patientId).length;
             };
 
             // Medicamentos con stock bajo filtrados por clínica
@@ -2540,8 +2546,9 @@
                                         ) : (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                 {filteredPatients.map(patient => {
-                                                    const lastRecord = getLastMedicalRecord(patient.id);
-                                                    const totalConsultations = getPatientMedicalRecords(patient.id).length;
+                                                    const lastRecord = getLastMedicalRecord(patient.id, activeClinicId);
+                                                    const totalConsultations = getPatientMedicalRecords(patient.id, activeClinicId).length;
+                                                    const totalAllClinics = getTotalPatientConsultations(patient.id);
                                                     const age = patient.dateOfBirth ? 
                                                         new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear() : 'N/A';
 
@@ -2564,7 +2571,10 @@
                                                                         </div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-500">
-                                                                        {totalConsultations} consulta{totalConsultations !== 1 ? 's' : ''}
+                                                                        {totalConsultations} en esta clínica
+                                                                        {totalAllClinics > totalConsultations && (
+                                                                            <span className="block">{totalAllClinics} total</span>
+                                                                        )}
                                                                     </span>
                                                                 </div>
 
@@ -2714,16 +2724,29 @@
 
                                         <div className="lg:col-span-3 bg-white rounded-lg shadow">
                                             <div className="p-6 border-b">
-                                                <h3 className="text-lg font-semibold">Historial de Consultas</h3>
+                                                <div className="flex items-center justify-between">
+                                                    <h3 className="text-lg font-semibold">Historial de Consultas</h3>
+                                                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                        <div className={`w-3 h-3 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
+                                                        <span>Solo de {clinics.find(c => c.id === activeClinicId)?.name}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="p-6">
-                                                {getPatientMedicalRecords(selectedPatient.id).length === 0 ? (
+                                                {getPatientMedicalRecords(selectedPatient.id, activeClinicId).length === 0 ? (
                                                     <div className="text-center py-8">
                                                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                                             <Icons.Calendar />
                                                         </div>
-                                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Sin consultas registradas</h3>
-                                                        <p className="text-gray-600 mb-4">Este paciente no tiene consultas médicas registradas.</p>
+                                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Sin consultas en esta clínica</h3>
+                                                        <p className="text-gray-600 mb-4">
+                                                            Este paciente no tiene consultas médicas registradas en <strong>{clinics.find(c => c.id === activeClinicId)?.name}</strong>.
+                                                            {getTotalPatientConsultations(selectedPatient.id) > 0 && (
+                                                                <span className="block text-sm mt-1">
+                                                                    (Tiene {getTotalPatientConsultations(selectedPatient.id)} consulta{getTotalPatientConsultations(selectedPatient.id) !== 1 ? 's' : ''} en otras clínicas)
+                                                                </span>
+                                                            )}
+                                                        </p>
                                                         <button
                                                             onClick={() => {
                                                                 setConsultationForm({
@@ -2738,12 +2761,12 @@
                                                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto transition-colors"
                                                         >
                                                             <Icons.Plus />
-                                                            Primera Consulta
+                                                            Primera Consulta en {clinics.find(c => c.id === activeClinicId)?.name}
                                                         </button>
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-6">
-                                                        {getPatientMedicalRecords(selectedPatient.id).map((record, index) => {
+                                                        {getPatientMedicalRecords(selectedPatient.id, activeClinicId).map((record, index) => {
                                                             const doctor = doctors.find(d => d.id === record.doctorId);
                                                             const clinic = clinics.find(c => c.id === record.clinicId);
                                                             
@@ -2918,7 +2941,7 @@
                                                 const clinicPatients = patients.filter(p => p.clinicId === activeClinicId);
                                                 const patientConsultations = clinicPatients.map(patient => ({
                                                     ...patient,
-                                                    consultationCount: getPatientMedicalRecords(patient.id).length
+                                                    consultationCount: getPatientMedicalRecords(patient.id, activeClinicId).length
                                                 }))
                                                 .filter(p => p.consultationCount > 0)
                                                 .sort((a, b) => b.consultationCount - a.consultationCount)
