@@ -96,7 +96,7 @@
         // CONFIGURACIÓN DE GOOGLE SHEETS
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1mBq1F76rjahF6cPzont5gw8p-53wfU4JGcasTcM_hEF-ewyms1BLnbtdroF76udu/exec';
                                    
-        // HELPER FUNCTIONS PARA FECHAS
+        // HELPER FUNCTIONS PARA FECHAS - CORREGIDO
         const DateHelper = {
             getLocalDateString: (date = new Date()) => {
                 const d = new Date(date);
@@ -133,31 +133,38 @@
                 }
             },
 
+            // FUNCIÓN CORREGIDA - Ya no hace conversiones innecesarias con Date()
             extractTimeOnly: (timeString) => {
                 if (!timeString) return '';
 
+                // Si ya es un formato HH:MM válido, devolverlo tal como está
                 if (typeof timeString === 'string' && timeString.match(/^\d{1,2}:\d{2}$/)) {
-                    return timeString;
+                    // Asegurar formato HH:MM (con ceros a la izquierda)
+                    const [hours, minutes] = timeString.split(':');
+                    return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
                 }
                 
-                let date;
+                // Si es un string con fecha completa (ISO), extraer solo la hora
                 if (typeof timeString === 'string' && timeString.includes('T')) {
-                    date = new Date(timeString);
-                } else {
-                    try {
-                        date = new Date(timeString);
-                    } catch (e) {
-                        console.warn('Could not parse time:', timeString);
-                        return timeString.toString();
+                    const timePart = timeString.split('T')[1];
+                    if (timePart) {
+                        const [hours, minutes] = timePart.split(':');
+                        if (hours && minutes) {
+                            return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+                        }
                     }
                 }
-
-                if (!isNaN(date.getTime())) {
-                    const hours = date.getHours().toString().padStart(2, '0');
-                    const minutes = date.getMinutes().toString().padStart(2, '0');
+                
+                // Solo si es absolutamente necesario, usar Date()
+                // pero esto debería evitarse para prevenir problemas de zona horaria
+                if (timeString instanceof Date) {
+                    const hours = timeString.getHours().toString().padStart(2, '0');
+                    const minutes = timeString.getMinutes().toString().padStart(2, '0');
                     return `${hours}:${minutes}`;
                 }
                 
+                // Como último recurso, devolver el string original
+                console.warn('Could not parse time, returning original:', timeString);
                 return timeString.toString();
             },
 
@@ -170,6 +177,25 @@
             dateFromString: (dateString) => {
                 const [year, month, day] = dateString.split('-').map(Number);
                 return new Date(year, month - 1, day);
+            },
+
+            // NUEVA FUNCIÓN: Validar formato de hora
+            isValidTimeFormat: (timeString) => {
+                if (!timeString) return false;
+                return /^\d{1,2}:\d{2}$/.test(timeString);
+            },
+
+            // NUEVA FUNCIÓN: Normalizar hora de entrada
+            normalizeTimeInput: (timeInput) => {
+                if (!timeInput) return '';
+                
+                // Si ya está en formato correcto, solo normalizar
+                if (DateHelper.isValidTimeFormat(timeInput)) {
+                    const [hours, minutes] = timeInput.split(':');
+                    return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+                }
+                
+                return DateHelper.extractTimeOnly(timeInput);
             }
         };
 
@@ -184,13 +210,22 @@
             },
 
             normalizeAppointment: (apt) => {
+                // Asegurar que la hora se mantenga en formato string sin conversiones
+                const normalizedTime = DateHelper.normalizeTimeInput(apt.time);
+                
+                console.log('🔧 Normalizing appointment:', {
+                    original: apt,
+                    originalTime: apt.time,
+                    normalizedTime: normalizedTime
+                });
+
                 return {
                     ...apt,
                     id: DataHelper.ensureNumber(apt.id),
                     doctorId: DataHelper.ensureNumber(apt.doctorId) || 1,
                     clinicId: DataHelper.ensureNumber(apt.clinicId) || 1,
                     date: DateHelper.extractDateOnly(apt.date),
-                    time: DateHelper.extractTimeOnly(apt.time)
+                    time: normalizedTime
                 };
             }
         };
@@ -209,7 +244,7 @@
             ),
             Plus: () => (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m0-6H6" />
                 </svg>
             ),
             ShoppingCart: () => (
@@ -385,10 +420,12 @@
             },
 
             async addAppointment(appointment) {
+                console.log('📅 Adding appointment with time:', appointment.time);
                 return await this.call('addAppointment', appointment);
             },
 
             async updateAppointment(appointment) {
+                console.log('📅 Updating appointment with time:', appointment.time);
                 return await this.call('updateAppointment', appointment);
             },
 
@@ -618,11 +655,14 @@
                     setPatients(patientsResult.data || []);
                     setMedicalRecords(recordsResult.data || []);
                     
-                    // Procesar citas con normalización de datos
+                    // Procesar citas con normalización de datos MEJORADA
                     const rawAppointments = appointmentsResult.data || [];
                     const processedAppointments = rawAppointments.map(apt => {
                         const normalized = DataHelper.normalizeAppointment(apt);
-                        console.log('📅 Normalized appointment:', normalized);
+                        console.log('📅 Normalized appointment:', {
+                            original: apt.time,
+                            normalized: normalized.time
+                        });
                         return normalized;
                     });
                     
@@ -744,23 +784,17 @@
                 return results;
             }, [patients, patientSearchTerm, activeClinicId]);
 
-            // Obtener registros médicos de un paciente (filtrado por clínica activa)
-            const getPatientMedicalRecords = (patientId, clinicId = null) => {
-                const targetClinicId = clinicId || activeClinicId;
+            // Obtener registros médicos de un paciente
+            const getPatientMedicalRecords = (patientId) => {
                 return medicalRecords
-                    .filter(record => record.patientId === patientId && record.clinicId === targetClinicId)
+                    .filter(record => record.patientId === patientId)
                     .sort((a, b) => new Date(b.date) - new Date(a.date));
             };
 
-            // Obtener último registro médico de un paciente (filtrado por clínica activa)
-            const getLastMedicalRecord = (patientId, clinicId = null) => {
-                const records = getPatientMedicalRecords(patientId, clinicId);
+            // Obtener último registro médico de un paciente
+            const getLastMedicalRecord = (patientId) => {
+                const records = getPatientMedicalRecords(patientId);
                 return records.length > 0 ? records[0] : null;
-            };
-
-            // Obtener total de consultas de un paciente en todas las clínicas
-            const getTotalPatientConsultations = (patientId) => {
-                return medicalRecords.filter(record => record.patientId === patientId).length;
             };
 
             // Medicamentos con stock bajo filtrados por clínica
@@ -1284,14 +1318,20 @@
                 }
             };
 
-            // Funciones CRUD para citas
+            // Funciones CRUD para citas - CORREGIDAS
             const addAppointment = async () => {
                 if (!appointmentForm.patientName || !appointmentForm.date || !appointmentForm.time || !appointmentForm.doctorId) {
                     alert('Por favor complete todos los campos obligatorios (nombre, fecha, hora y médico)');
                     return;
                 }
 
-                const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
+                // CORREGIDO: Usar la nueva función de normalización que NO hace conversiones innecesarias
+                const normalizedTime = DateHelper.normalizeTimeInput(appointmentForm.time);
+                
+                console.log('🕐 Adding appointment - Time processing:', {
+                    original: appointmentForm.time,
+                    normalized: normalizedTime
+                });
 
                 const existingAppointment = appointments.find(apt => 
                     DateHelper.extractDateOnly(apt.date) === appointmentForm.date && 
@@ -1317,7 +1357,7 @@
                         phone: appointmentForm.phone,
                         email: appointmentForm.email,
                         date: appointmentForm.date,
-                        time: normalizedTime,
+                        time: normalizedTime, // Usar la hora normalizada SIN conversiones
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
@@ -1326,13 +1366,15 @@
                         createdAt: new Date().toISOString()
                     };
 
+                    console.log('🕐 Final appointment object:', newAppointment);
+
                     if (connectionStatus === 'online') {
                         await API.addAppointment(newAppointment);
                         setLastSync(new Date());
                     }
 
-                    const normalizedAppointment = DataHelper.normalizeAppointment(newAppointment);
-                    setAppointments(prev => [...prev, normalizedAppointment]);
+                    // NO normalizar nuevamente - ya está normalizada
+                    setAppointments(prev => [...prev, newAppointment]);
                     
                     resetAppointmentForm();
                     setShowAppointmentForm(false);
@@ -1353,7 +1395,13 @@
                     return;
                 }
 
-                const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
+                // CORREGIDO: Usar la nueva función de normalización
+                const normalizedTime = DateHelper.normalizeTimeInput(appointmentForm.time);
+                
+                console.log('🕐 Updating appointment - Time processing:', {
+                    original: appointmentForm.time,
+                    normalized: normalizedTime
+                });
 
                 const existingAppointment = appointments.find(apt => 
                     DateHelper.extractDateOnly(apt.date) === appointmentForm.date && 
@@ -1379,7 +1427,7 @@
                         phone: appointmentForm.phone,
                         email: appointmentForm.email,
                         date: appointmentForm.date,
-                        time: normalizedTime,
+                        time: normalizedTime, // Usar la hora normalizada SIN conversiones
                         type: appointmentForm.type,
                         notes: appointmentForm.notes,
                         status: appointmentForm.status,
@@ -1387,14 +1435,16 @@
                         clinicId: appointmentForm.clinicId
                     };
 
+                    console.log('🕐 Final updated appointment object:', updatedAppointment);
+
                     if (connectionStatus === 'online') {
                         await API.updateAppointment(updatedAppointment);
                         setLastSync(new Date());
                     }
                     
-                    const normalizedAppointment = DataHelper.normalizeAppointment(updatedAppointment);
+                    // NO normalizar nuevamente - ya está normalizada
                     setAppointments(prev => prev.map(apt => 
-                        apt.id === editingAppointment.id ? normalizedAppointment : apt
+                        apt.id === editingAppointment.id ? updatedAppointment : apt
                     ));
                     
                     resetAppointmentForm();
@@ -1553,7 +1603,7 @@
                     doctors,
                     activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '4.0'
+                    version: '4.1'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -1742,10 +1792,40 @@
                                         <Icons.Download />
                                         Backup
                                     </button>
+                                    <button
+                                        onClick={() => setDebugMode(!debugMode)}
+                                        className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                                    >
+                                        <Icons.Bug />
+                                        Debug
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </header>
+
+                    {/* Debug Panel - NUEVO */}
+                    {debugMode && (
+                        <div className="debug-panel">
+                            <h4 className="font-bold mb-2">🔧 Debug Info</h4>
+                            <div className="space-y-1 text-xs">
+                                <div>Appointments: {appointments.length}</div>
+                                <div>Today: {DateHelper.getTodayString()}</div>
+                                <div>Status: {connectionStatus}</div>
+                                <div>Active Clinic: {clinics.find(c => c.id === activeClinicId)?.name}</div>
+                                <div>Active Doctor: {doctors.find(d => d.id === activeDoctorId)?.name}</div>
+                                {appointments.slice(0, 3).map(apt => (
+                                    <div key={apt.id} className="border-t border-gray-600 pt-1 mt-1">
+                                        <div>ID: {apt.id}</div>
+                                        <div>Patient: {apt.patientName}</div>
+                                        <div>Date: {apt.date}</div>
+                                        <div>Time: {apt.time}</div>
+                                        <div>Doctor: {apt.doctorId}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Selector de Clínicas */}
                     <div className="bg-white shadow-sm border-b">
@@ -2350,7 +2430,7 @@
                                                                                 phone: apt.phone || '',
                                                                                 email: apt.email || '',
                                                                                 date: DateHelper.extractDateOnly(apt.date),
-                                                                                time: DateHelper.extractTimeOnly(apt.time),
+                                                                                time: apt.time, // CORREGIDO: Usar directamente sin extractTimeOnly
                                                                                 type: apt.type,
                                                                                 notes: apt.notes || '',
                                                                                 status: apt.status,
@@ -2359,7 +2439,7 @@
                                                                             });
                                                                         }}
                                                                     >
-                                                                        {DateHelper.extractTimeOnly(apt.time)} {apt.patientName}
+                                                                        {apt.time} {apt.patientName}
                                                                     </div>
                                                                 ))}
                                                                 {dayAppointments.length > 3 && (
@@ -2397,7 +2477,7 @@
                                                                     <h4 className="font-medium text-gray-900 text-sm">{apt.patientName}</h4>
                                                                     <p className="text-xs text-gray-600 flex items-center gap-1">
                                                                         <Icons.Clock />
-                                                                        {DateHelper.extractTimeOnly(apt.time)}
+                                                                        {apt.time}
                                                                     </p>
                                                                     <p className="text-xs text-gray-600">{apt.type}</p>
                                                                 </div>
@@ -2451,7 +2531,7 @@
                                                                             phone: apt.phone || '',
                                                                             email: apt.email || '',
                                                                             date: DateHelper.extractDateOnly(apt.date),
-                                                                            time: DateHelper.extractTimeOnly(apt.time),
+                                                                            time: apt.time, // CORREGIDO: Usar directamente
                                                                             type: apt.type,
                                                                             notes: apt.notes || '',
                                                                             status: apt.status,
@@ -2546,9 +2626,8 @@
                                         ) : (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                 {filteredPatients.map(patient => {
-                                                    const lastRecord = getLastMedicalRecord(patient.id, activeClinicId);
-                                                    const totalConsultations = getPatientMedicalRecords(patient.id, activeClinicId).length;
-                                                    const totalAllClinics = getTotalPatientConsultations(patient.id);
+                                                    const lastRecord = getLastMedicalRecord(patient.id);
+                                                    const totalConsultations = getPatientMedicalRecords(patient.id).length;
                                                     const age = patient.dateOfBirth ? 
                                                         new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear() : 'N/A';
 
@@ -2571,10 +2650,7 @@
                                                                         </div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-500">
-                                                                        {totalConsultations} en esta clínica
-                                                                        {totalAllClinics > totalConsultations && (
-                                                                            <span className="block">{totalAllClinics} total</span>
-                                                                        )}
+                                                                        {totalConsultations} consulta{totalConsultations !== 1 ? 's' : ''}
                                                                     </span>
                                                                 </div>
 
@@ -2724,29 +2800,16 @@
 
                                         <div className="lg:col-span-3 bg-white rounded-lg shadow">
                                             <div className="p-6 border-b">
-                                                <div className="flex items-center justify-between">
-                                                    <h3 className="text-lg font-semibold">Historial de Consultas</h3>
-                                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                        <div className={`w-3 h-3 rounded-full bg-${clinics.find(c => c.id === activeClinicId)?.color}-500`}></div>
-                                                        <span>Solo de {clinics.find(c => c.id === activeClinicId)?.name}</span>
-                                                    </div>
-                                                </div>
+                                                <h3 className="text-lg font-semibold">Historial de Consultas</h3>
                                             </div>
                                             <div className="p-6">
-                                                {getPatientMedicalRecords(selectedPatient.id, activeClinicId).length === 0 ? (
+                                                {getPatientMedicalRecords(selectedPatient.id).length === 0 ? (
                                                     <div className="text-center py-8">
                                                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                                             <Icons.Calendar />
                                                         </div>
-                                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Sin consultas en esta clínica</h3>
-                                                        <p className="text-gray-600 mb-4">
-                                                            Este paciente no tiene consultas médicas registradas en <strong>{clinics.find(c => c.id === activeClinicId)?.name}</strong>.
-                                                            {getTotalPatientConsultations(selectedPatient.id) > 0 && (
-                                                                <span className="block text-sm mt-1">
-                                                                    (Tiene {getTotalPatientConsultations(selectedPatient.id)} consulta{getTotalPatientConsultations(selectedPatient.id) !== 1 ? 's' : ''} en otras clínicas)
-                                                                </span>
-                                                            )}
-                                                        </p>
+                                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Sin consultas registradas</h3>
+                                                        <p className="text-gray-600 mb-4">Este paciente no tiene consultas médicas registradas.</p>
                                                         <button
                                                             onClick={() => {
                                                                 setConsultationForm({
@@ -2761,12 +2824,12 @@
                                                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto transition-colors"
                                                         >
                                                             <Icons.Plus />
-                                                            Primera Consulta en {clinics.find(c => c.id === activeClinicId)?.name}
+                                                            Primera Consulta
                                                         </button>
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-6">
-                                                        {getPatientMedicalRecords(selectedPatient.id, activeClinicId).map((record, index) => {
+                                                        {getPatientMedicalRecords(selectedPatient.id).map((record, index) => {
                                                             const doctor = doctors.find(d => d.id === record.doctorId);
                                                             const clinic = clinics.find(c => c.id === record.clinicId);
                                                             
@@ -2941,7 +3004,7 @@
                                                 const clinicPatients = patients.filter(p => p.clinicId === activeClinicId);
                                                 const patientConsultations = clinicPatients.map(patient => ({
                                                     ...patient,
-                                                    consultationCount: getPatientMedicalRecords(patient.id, activeClinicId).length
+                                                    consultationCount: getPatientMedicalRecords(patient.id).length
                                                 }))
                                                 .filter(p => p.consultationCount > 0)
                                                 .sort((a, b) => b.consultationCount - a.consultationCount)
@@ -3223,7 +3286,7 @@
                         </div>
                     )}
 
-                    {/* Modal Agregar/Editar Cita */}
+                    {/* Modal Agregar/Editar Cita - CORREGIDO */}
                     {(showAppointmentForm || editingAppointment) && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                             <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto fade-in">
@@ -3339,11 +3402,14 @@
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Hora *
+                                                    Hora * {debugMode && <span className="text-xs text-gray-500">({appointmentForm.time})</span>}
                                                 </label>
                                                 <select
                                                     value={appointmentForm.time}
-                                                    onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                                                    onChange={(e) => {
+                                                        console.log('🕐 Time selected:', e.target.value);
+                                                        setAppointmentForm({...appointmentForm, time: e.target.value});
+                                                    }}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                     disabled={loading}
                                                 >
@@ -3999,7 +4065,7 @@
                                                             <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                                                                 <span className="flex items-center gap-1">
                                                                     <Icons.Clock />
-                                                                    {DateHelper.extractTimeOnly(apt.time)}
+                                                                    {apt.time}
                                                                 </span>
                                                                 <span className="flex items-center gap-1">
                                                                     👨‍⚕️ {doctors.find(d => d.id === apt.doctorId)?.name}
@@ -4081,7 +4147,7 @@
                                                                     phone: apt.phone || '',
                                                                     email: apt.email || '',
                                                                     date: DateHelper.extractDateOnly(apt.date),
-                                                                    time: DateHelper.extractTimeOnly(apt.time),
+                                                                    time: apt.time, // CORREGIDO: Usar directamente
                                                                     type: apt.type,
                                                                     notes: apt.notes || '',
                                                                     status: apt.status,
