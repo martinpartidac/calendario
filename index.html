@@ -133,7 +133,7 @@
                 }
             },
 
-            // FUNCIÓN CORREGIDA - Ya no hace conversiones innecesarias con Date()
+            // FUNCIÓN CORREGIDA - Limpia toda la información extra y solo devuelve HH:MM
             extractTimeOnly: (timeString) => {
                 if (!timeString) return '';
 
@@ -155,17 +155,27 @@
                     }
                 }
                 
+                // NUEVO: Limpiar información de zona horaria y fechas extrañas
+                if (typeof timeString === 'string') {
+                    // Buscar patrón de hora HH:MM en cualquier parte del string
+                    const timeMatch = timeString.match(/\b(\d{1,2}):(\d{2})\b/);
+                    if (timeMatch) {
+                        const hours = timeMatch[1].padStart(2, '0');
+                        const minutes = timeMatch[2];
+                        return `${hours}:${minutes}`;
+                    }
+                }
+                
                 // Solo si es absolutamente necesario, usar Date()
-                // pero esto debería evitarse para prevenir problemas de zona horaria
-                if (timeString instanceof Date) {
+                if (timeString instanceof Date && !isNaN(timeString.getTime())) {
                     const hours = timeString.getHours().toString().padStart(2, '0');
                     const minutes = timeString.getMinutes().toString().padStart(2, '0');
                     return `${hours}:${minutes}`;
                 }
                 
-                // Como último recurso, devolver el string original
-                console.warn('Could not parse time, returning original:', timeString);
-                return timeString.toString();
+                // Si no se puede extraer una hora válida, devolver string vacío
+                console.warn('Could not extract valid time from:', timeString);
+                return '';
             },
 
             areSameDate: (date1, date2) => {
@@ -210,8 +220,8 @@
             },
 
             normalizeAppointment: (apt) => {
-                // Asegurar que la hora se mantenga en formato string sin conversiones
-                const normalizedTime = DateHelper.normalizeTimeInput(apt.time);
+                // CORREGIDO: Limpiar completamente la hora para eliminar información de zona horaria
+                const normalizedTime = DateHelper.extractTimeOnly(apt.time);
                 
                 console.log('🔧 Normalizing appointment:', {
                     original: apt,
@@ -225,7 +235,7 @@
                     doctorId: DataHelper.ensureNumber(apt.doctorId) || 1,
                     clinicId: DataHelper.ensureNumber(apt.clinicId) || 1,
                     date: DateHelper.extractDateOnly(apt.date),
-                    time: normalizedTime
+                    time: normalizedTime // Usar la función mejorada que limpia toda la info extra
                 };
             }
         };
@@ -872,6 +882,7 @@
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
 
+                // CORREGIDO: Limpiar las horas para ordenamiento
                 filtered.sort((a, b) => {
                     const timeA = DateHelper.extractTimeOnly(a.time);
                     const timeB = DateHelper.extractTimeOnly(b.time);
@@ -894,6 +905,7 @@
                     return matchesDate && matchesDoctor && matchesClinic;
                 });
 
+                // CORREGIDO: Limpiar las horas para ordenamiento
                 filtered.sort((a, b) => {
                     const timeA = DateHelper.extractTimeOnly(a.time);
                     const timeB = DateHelper.extractTimeOnly(b.time);
@@ -916,6 +928,7 @@
                            apt.clinicId === targetClinicId;
                 });
                 
+                // CORREGIDO: Limpiar las horas para comparación
                 const bookedTimes = dayAppointments.map(apt => DateHelper.extractTimeOnly(apt.time));
                 const available = timeSlots.filter(time => !bookedTimes.includes(time));
                 
@@ -1325,8 +1338,8 @@
                     return;
                 }
 
-                // CORREGIDO: Usar la nueva función de normalización que NO hace conversiones innecesarias
-                const normalizedTime = DateHelper.normalizeTimeInput(appointmentForm.time);
+                // CORREGIDO: Usar la nueva función de normalización que limpia completamente la hora
+                const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
                 
                 console.log('🕐 Adding appointment - Time processing:', {
                     original: appointmentForm.time,
@@ -1395,8 +1408,8 @@
                     return;
                 }
 
-                // CORREGIDO: Usar la nueva función de normalización
-                const normalizedTime = DateHelper.normalizeTimeInput(appointmentForm.time);
+                // CORREGIDO: Usar la función extractTimeOnly que limpia completamente la hora
+                const normalizedTime = DateHelper.extractTimeOnly(appointmentForm.time);
                 
                 console.log('🕐 Updating appointment - Time processing:', {
                     original: appointmentForm.time,
@@ -1603,7 +1616,7 @@
                     doctors,
                     activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '4.1'
+                    version: '4.2'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -2430,7 +2443,7 @@
                                                                                 phone: apt.phone || '',
                                                                                 email: apt.email || '',
                                                                                 date: DateHelper.extractDateOnly(apt.date),
-                                                                                time: apt.time, // CORREGIDO: Usar directamente sin extractTimeOnly
+                                                                                time: DateHelper.extractTimeOnly(apt.time), // CORREGIDO: Limpiar la hora
                                                                                 type: apt.type,
                                                                                 notes: apt.notes || '',
                                                                                 status: apt.status,
@@ -2439,7 +2452,7 @@
                                                                             });
                                                                         }}
                                                                     >
-                                                                        {apt.time} {apt.patientName}
+                                                                        {DateHelper.extractTimeOnly(apt.time)} {apt.patientName}
                                                                     </div>
                                                                 ))}
                                                                 {dayAppointments.length > 3 && (
@@ -2477,7 +2490,7 @@
                                                                     <h4 className="font-medium text-gray-900 text-sm">{apt.patientName}</h4>
                                                                     <p className="text-xs text-gray-600 flex items-center gap-1">
                                                                         <Icons.Clock />
-                                                                        {apt.time}
+                                                                        {DateHelper.extractTimeOnly(apt.time)}
                                                                     </p>
                                                                     <p className="text-xs text-gray-600">{apt.type}</p>
                                                                 </div>
@@ -2531,7 +2544,7 @@
                                                                             phone: apt.phone || '',
                                                                             email: apt.email || '',
                                                                             date: DateHelper.extractDateOnly(apt.date),
-                                                                            time: apt.time, // CORREGIDO: Usar directamente
+                                                                            time: DateHelper.extractTimeOnly(apt.time), // CORREGIDO: Limpiar la hora
                                                                             type: apt.type,
                                                                             notes: apt.notes || '',
                                                                             status: apt.status,
@@ -4065,7 +4078,7 @@
                                                             <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                                                                 <span className="flex items-center gap-1">
                                                                     <Icons.Clock />
-                                                                    {apt.time}
+                                                                    {DateHelper.extractTimeOnly(apt.time)}
                                                                 </span>
                                                                 <span className="flex items-center gap-1">
                                                                     👨‍⚕️ {doctors.find(d => d.id === apt.doctorId)?.name}
@@ -4147,7 +4160,7 @@
                                                                     phone: apt.phone || '',
                                                                     email: apt.email || '',
                                                                     date: DateHelper.extractDateOnly(apt.date),
-                                                                    time: apt.time, // CORREGIDO: Usar directamente
+                                                                    time: DateHelper.extractTimeOnly(apt.time), // CORREGIDO: Limpiar la hora
                                                                     type: apt.type,
                                                                     notes: apt.notes || '',
                                                                     status: apt.status,
