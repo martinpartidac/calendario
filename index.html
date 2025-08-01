@@ -690,7 +690,14 @@
                         medicalRecords: recordsResult.data?.length || 0
                     });
 
-                    setMedications(medsResult.data || []);
+                    // CORREGIDO: Asegurar que los medicamentos tienen el campo symptoms
+                    const processedMedications = (medsResult.data || []).map(med => ({
+                        ...med,
+                        symptoms: med.symptoms || [] // Asegurar que existe el campo symptoms
+                    }));
+                    console.log('💊 Processed medications with symptoms:', processedMedications);
+
+                    setMedications(processedMedications);
                     setSalesHistory(salesResult.data || []);
                     setPatients(patientsResult.data || []);
                     setMedicalRecords(recordsResult.data || []);
@@ -715,14 +722,21 @@
                     console.error('❌ Error loading data:', error);
                     setConnectionStatus('error');
                     
-                    // Fallback a localStorage
+                    // CORREGIDO: Fallback a localStorage con soporte para symptoms
                     const savedMeds = localStorage.getItem('pharmacy_medications');
                     const savedSales = localStorage.getItem('pharmacy_sales');
                     const savedAppointments = localStorage.getItem('pharmacy_appointments');
                     const savedPatients = localStorage.getItem('pharmacy_patients');
                     const savedRecords = localStorage.getItem('pharmacy_medical_records');
                     
-                    if (savedMeds) setMedications(JSON.parse(savedMeds));
+                    if (savedMeds) {
+                        const localMeds = JSON.parse(savedMeds).map(med => ({
+                            ...med,
+                            symptoms: med.symptoms || [] // Asegurar que existe el campo symptoms
+                        }));
+                        console.log('💊 Loaded from localStorage with symptoms:', localMeds);
+                        setMedications(localMeds);
+                    }
                     if (savedSales) setSalesHistory(JSON.parse(savedSales));
                     if (savedPatients) setPatients(JSON.parse(savedPatients));
                     if (savedRecords) setMedicalRecords(JSON.parse(savedRecords));
@@ -736,8 +750,14 @@
                 }
             };
 
-            // Guardar en localStorage como backup
+            // Guardar en localStorage como backup - MEJORADO
             useEffect(() => {
+                console.log('💾 Saving medications to localStorage:', medications.length, 'items');
+                medications.forEach((med, index) => {
+                    if (index < 3) { // Log primeros 3 para debug
+                        console.log(`💊 Med ${index}:`, med.name, 'Symptoms:', med.symptoms || []);
+                    }
+                });
                 localStorage.setItem('pharmacy_medications', JSON.stringify(medications));
             }, [medications]);
 
@@ -757,7 +777,26 @@
                 localStorage.setItem('pharmacy_medical_records', JSON.stringify(medicalRecords));
             }, [medicalRecords]);
 
-            // Actualizar formularios cuando cambie la clínica activa
+            // NUEVA FUNCIÓN: Migrar medicamentos existentes sin síntomas
+            const migrateMedicationsData = () => {
+                const needsMigration = medications.some(med => !med.hasOwnProperty('symptoms'));
+                if (needsMigration) {
+                    console.log('🔄 Migrating medications to include symptoms field...');
+                    const migratedMeds = medications.map(med => ({
+                        ...med,
+                        symptoms: med.symptoms || []
+                    }));
+                    setMedications(migratedMeds);
+                    console.log('✅ Migration completed');
+                }
+            };
+
+            // Ejecutar migración cuando se cargan los medicamentos
+            useEffect(() => {
+                if (medications.length > 0) {
+                    migrateMedicationsData();
+                }
+            }, [medications.length]); // Solo ejecutar cuando cambie la cantidad de medicamentos
             useEffect(() => {
                 setFormData(prev => ({...prev, clinicId: activeClinicId}));
                 setAppointmentForm(prev => ({...prev, clinicId: activeClinicId}));
@@ -1850,6 +1889,20 @@
                                         <Icons.Bug />
                                         Debug
                                     </button>
+                                    <button
+                                        onClick={() => {
+                                            // Función de debug para corregir síntomas
+                                            const migratedMeds = medications.map(med => ({
+                                                ...med,
+                                                symptoms: med.symptoms || []
+                                            }));
+                                            setMedications(migratedMeds);
+                                            alert(`Migración completada: ${migratedMeds.length} medicamentos procesados`);
+                                        }}
+                                        className="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-white"
+                                    >
+                                        🔧 Fix Data
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1868,18 +1921,46 @@
                                 <div>Active Doctor: {doctors.find(d => d.id === activeDoctorId)?.name}</div>
                                 
                                 <div className="border-t border-gray-600 pt-1 mt-1">
+                                    <strong>Symptoms Debug:</strong>
+                                    <div>Medications with symptoms: {medications.filter(med => med.symptoms && med.symptoms.length > 0).length}</div>
+                                    <div>Medications without symptoms: {medications.filter(med => !med.symptoms || med.symptoms.length === 0).length}</div>
+                                </div>
+                                
+                                <div className="border-t border-gray-600 pt-1 mt-1">
                                     <strong>Sample Medications:</strong>
                                     {medications.slice(0, 2).map(med => (
                                         <div key={med.id} className="mt-1 p-1 bg-gray-700 rounded">
                                             <div>Name: {med.name}</div>
+                                            <div>Has symptoms field: {med.hasOwnProperty('symptoms') ? 'Yes' : 'No'}</div>
                                             <div>Symptoms: {JSON.stringify(med.symptoms || [])}</div>
+                                            <div>Symptoms length: {(med.symptoms || []).length}</div>
                                         </div>
                                     ))}
                                 </div>
                                 
                                 <div className="border-t border-gray-600 pt-1 mt-1">
                                     <strong>FormData Symptoms:</strong>
-                                    <div>{JSON.stringify(formData.symptoms || [])}</div>
+                                    <div>Length: {(formData.symptoms || []).length}</div>
+                                    <div>Data: {JSON.stringify(formData.symptoms || [])}</div>
+                                </div>
+                                
+                                <div className="border-t border-gray-600 pt-1 mt-1">
+                                    <strong>localStorage Check:</strong>
+                                    <button 
+                                        onClick={() => {
+                                            const stored = localStorage.getItem('pharmacy_medications');
+                                            if (stored) {
+                                                const parsed = JSON.parse(stored);
+                                                console.log('LocalStorage medications:', parsed);
+                                                alert(`Found ${parsed.length} medications in localStorage. Check console for details.`);
+                                            } else {
+                                                alert('No medications found in localStorage');
+                                            }
+                                        }}
+                                        className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                                    >
+                                        Check localStorage
+                                    </button>
                                 </div>
                                 
                                 {appointments.slice(0, 2).map(apt => (
