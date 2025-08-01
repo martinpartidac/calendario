@@ -1025,6 +1025,8 @@
                         dateAdded: new Date().toISOString()
                     };
 
+                    console.log('🔄 Adding medication with symptoms:', newMed.symptoms);
+
                     if (connectionStatus === 'online') {
                         await API.addMedication(newMed);
                         setLastSync(new Date());
@@ -1066,6 +1068,8 @@
                         phone: formData.phone,
                         symptoms: formData.symptoms || []
                     };
+
+                    console.log('🔄 Updating medication with symptoms:', updatedMed.symptoms);
 
                     if (connectionStatus === 'online') {
                         await API.updateMedication(updatedMed);
@@ -1649,7 +1653,7 @@
                     doctors,
                     activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '4.4'
+                    version: '4.5'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -1851,17 +1855,34 @@
                         </div>
                     </header>
 
-                    {/* Debug Panel - NUEVO */}
+                    {/* Debug Panel - MEJORADO */}
                     {debugMode && (
                         <div className="debug-panel">
                             <h4 className="font-bold mb-2">🔧 Debug Info</h4>
                             <div className="space-y-1 text-xs">
                                 <div>Appointments: {appointments.length}</div>
+                                <div>Medications: {medications.length}</div>
                                 <div>Today: {DateHelper.getTodayString()}</div>
                                 <div>Status: {connectionStatus}</div>
                                 <div>Active Clinic: {clinics.find(c => c.id === activeClinicId)?.name}</div>
                                 <div>Active Doctor: {doctors.find(d => d.id === activeDoctorId)?.name}</div>
-                                {appointments.slice(0, 3).map(apt => (
+                                
+                                <div className="border-t border-gray-600 pt-1 mt-1">
+                                    <strong>Sample Medications:</strong>
+                                    {medications.slice(0, 2).map(med => (
+                                        <div key={med.id} className="mt-1 p-1 bg-gray-700 rounded">
+                                            <div>Name: {med.name}</div>
+                                            <div>Symptoms: {JSON.stringify(med.symptoms || [])}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                <div className="border-t border-gray-600 pt-1 mt-1">
+                                    <strong>FormData Symptoms:</strong>
+                                    <div>{JSON.stringify(formData.symptoms || [])}</div>
+                                </div>
+                                
+                                {appointments.slice(0, 2).map(apt => (
                                     <div key={apt.id} className="border-t border-gray-600 pt-1 mt-1">
                                         <div>ID: {apt.id}</div>
                                         <div>Patient: {apt.patientName}</div>
@@ -2208,11 +2229,18 @@
                                                                 </div>
                                                             </div>
                                                         )}
+                                                        {debugMode && (
+                                                            <div className="mt-2 p-2 bg-yellow-50 rounded text-xs">
+                                                                <strong>Debug:</strong> Symptoms: {JSON.stringify(med.symptoms || [])}
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     <div className="flex gap-2 mt-4">
                                                         <button
                                                             onClick={() => {
+                                                                console.log('🔧 Editing medication:', med);
+                                                                console.log('🔧 Medication symptoms:', med.symptoms);
                                                                 setEditingMed(med);
                                                                 setFormData({
                                                                     name: med.name,
@@ -2227,6 +2255,7 @@
                                                                     clinicId: med.clinicId,
                                                                     symptoms: med.symptoms || []
                                                                 });
+                                                                console.log('🔧 FormData symptoms set to:', med.symptoms || []);
                                                             }}
                                                             disabled={loading}
                                                             className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded text-sm flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
@@ -3231,6 +3260,11 @@
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 ¿Para qué se usa? (Síntomas)
                                             </label>
+                                            {debugMode && (
+                                                <div className="mb-2 p-2 bg-yellow-50 rounded text-xs">
+                                                    <strong>Debug FormData.symptoms:</strong> {JSON.stringify(formData.symptoms)}
+                                                </div>
+                                            )}
                                             <div className="border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto">
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {symptoms.map(symptom => (
@@ -3239,15 +3273,20 @@
                                                                 type="checkbox"
                                                                 checked={formData.symptoms.includes(symptom)}
                                                                 onChange={(e) => {
+                                                                    console.log('🔧 Checkbox changed:', symptom, e.target.checked);
                                                                     if (e.target.checked) {
+                                                                        const newSymptoms = [...formData.symptoms, symptom];
+                                                                        console.log('🔧 Adding symptom, new array:', newSymptoms);
                                                                         setFormData({
                                                                             ...formData, 
-                                                                            symptoms: [...formData.symptoms, symptom]
+                                                                            symptoms: newSymptoms
                                                                         });
                                                                     } else {
+                                                                        const newSymptoms = formData.symptoms.filter(s => s !== symptom);
+                                                                        console.log('🔧 Removing symptom, new array:', newSymptoms);
                                                                         setFormData({
                                                                             ...formData, 
-                                                                            symptoms: formData.symptoms.filter(s => s !== symptom)
+                                                                            symptoms: newSymptoms
                                                                         });
                                                                     }
                                                                 }}
@@ -3267,10 +3306,13 @@
                                                             <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs flex items-center gap-1">
                                                                 {symptom}
                                                                 <button
-                                                                    onClick={() => setFormData({
-                                                                        ...formData, 
-                                                                        symptoms: formData.symptoms.filter(s => s !== symptom)
-                                                                    })}
+                                                                    onClick={() => {
+                                                                        console.log('🔧 Removing symptom via chip:', symptom);
+                                                                        setFormData({
+                                                                            ...formData, 
+                                                                            symptoms: formData.symptoms.filter(s => s !== symptom)
+                                                                        });
+                                                                    }}
                                                                     className="ml-1 text-blue-600 hover:text-blue-800"
                                                                     type="button"
                                                                 >
