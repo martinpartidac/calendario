@@ -594,7 +594,8 @@
 
             const presentations = [
                 'Tabletas', 'Cápsulas', 'Jarabe', 'Inyección', 
-                'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel'
+                'Crema', 'Gotas', 'Supositorio', 'Spray', 'Gel',
+                'Óvulos', 'Suspensión'
             ];
 
             const clinics = [
@@ -1616,7 +1617,7 @@
                     doctors,
                     activeClinicId,
                     exportDate: new Date().toISOString(),
-                    version: '4.2'
+                    version: '4.3'
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], {
